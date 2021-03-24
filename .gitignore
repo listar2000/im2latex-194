@@ -1,0 +1,5 @@
+*CAPTIONS.json
+*.pkl
+*.hdf5
+__pycache__/
+*_demo.py
