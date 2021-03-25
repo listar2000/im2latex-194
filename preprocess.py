@@ -93,11 +93,10 @@ def preprocess_hdf(split, formulas, word_map, max_len):
             img = img.transpose(2, 0, 1)
             assert img.shape[0] == 3
             assert np.max(img) <= 255
-
             # Save image to HDF5 file
             images[i] = img
 
-            caption_info.append(caption_embed(word_map, formulas[formula_ids[i]]))
+            caption_info.append(caption_embed(word_map, formulas[formula_ids[i]], max_len))
     
     # Save encoded captions and their lengths to JSON files
     with open(join(PROCESSED_FOLDER_PATH, split + '_CAPTIONS' + '.json'), 'w') as j:
@@ -120,7 +119,7 @@ def preprocess_pkl(split, formulas, word_map, max_len):
         for line in tqdm(f):
             tot += 1
             img_name, formula_id = line.strip('\n').split()
-            formula = formulas[int(formula_id) - 1]
+            formula = formulas[int(formula_id)]
             form_len = len(formula.split())
             if form_len <= max_len:
                 val += 1
