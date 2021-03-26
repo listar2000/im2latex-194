@@ -33,7 +33,7 @@ import numpy as np
 import json
 
 def preprocess(store_pkl, train=True, val=True, test=True, max_len=preprocess_config['max_len']):
-    formulas_file = join(DATA_FOLDER_PATH, "im2latex_formulas.norm.lst")
+    formulas_file = join(DATA_FOLDER_PATH, "formulas.norm.lst") # im2latex_formulas.norm.lst
     with open(formulas_file, 'r') as f:
         formulas = [formula.strip('\n') for formula in f.readlines()]
     
@@ -71,7 +71,7 @@ def preprocess_hdf(split, formulas, word_map, max_len):
     print("*** start preprocessing into the .hdf5 format")
     print("Process {} dataset...".format(split))
 
-    split_fn = "im2latex_{}_filter.lst".format(split)
+    split_fn = "{}_filter.lst".format(split) # im2latex_{}_filter.lst
     split_fp = join(DATA_FOLDER_PATH, split_fn)
 
     img_names, formula_ids = [], []
@@ -108,7 +108,7 @@ def preprocess_pkl(split, formulas, word_map, max_len):
     print("*** start preprocessing into the .pkl format")
     print("Process {} dataset...".format(split))
 
-    split_fn = "im2latex_{}_filter.lst".format(split)
+    split_fn = "{}_filter.lst".format(split) # im2latex_{}_filter.lst
     split_fp = join(DATA_FOLDER_PATH, split_fn)
 
     images, caption_info = [], []

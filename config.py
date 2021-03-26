@@ -5,7 +5,7 @@ import os
 
 # data path related configs
 DATA_FOLDER_PATH = './data'
-IMG_FOLDER_PATH = os.path.join(DATA_FOLDER_PATH, 'formula_images_processed')
+IMG_FOLDER_PATH = os.path.join(DATA_FOLDER_PATH, 'images_processed') # 'formula_images_processed' for full data
 PROCESSED_FOLDER_PATH = './processed_data'
 
 preprocess_config = {

@@ -2,7 +2,7 @@ from config import PROCESSED_FOLDER_PATH, train_config
 from data import Im2LatexDataset
 from encoder import Encoder
 from decoder import DecoderWithAttention
-from build_vocab import load_vocab, Vocab
+from build_vocab import load_vocab, Vocab, START_TOKEN, PAD_TOKEN
 from utils import *
 
 import time
@@ -61,18 +61,18 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
         img = img.to(device)
         form = form.to(device)
         form_len = form_len.to(device)
+        # print("formula length:", len(form[0]), form_len[0])
 
         # Forward proprgation
         img = encoder(img)
-        scores, form_sorted, decode_lengths, alphas, sort_ind = decoder(img, form, form_len)
+        scores, form_sorted, decode_lengths, alphas, sort_ind = decoder(img, form, form_len)    
         targets = form_sorted[:, 1:]
-
-        print("not padded:", scores.shape, targets.shape, decode_lengths)
+        # print("not padded:", scores.shape, targets.shape, decode_lengths)
 
         scores = pack_padded_sequence(scores, decode_lengths, batch_first=True).data
         targets = pack_padded_sequence(targets, decode_lengths, batch_first=True).data
-
-        print("packed padded:", scores.shape, targets.shape)
+        
+        # print("after padding:", scores.shape, targets.shape)
 
         # Calculate loss
         loss = criterion(scores, targets)
@@ -119,25 +119,30 @@ def validate(val_loader, encoder, decoder, criterion, vocab):
     references = list() # True formulas
     predictions = list() # Predictions
     with torch.no_grad():
-        for i, (img, form, formlen) in enumerate(train_loader):
+        for i, (img, form, form_len) in enumerate(train_loader):
             # Move to GPU, if available
             img = img.to(device)
             form = form.to(device)
-            formlen = formlen.to(device)
+            form_len = form_len.to(device)
+            
+            # print("Original img shape:", img.shape)
 
             # Forward proprgation
             img = encoder(img)
-            scores, caps_sorted, decode_lengths, alphas, sort_ind = decoder(imgs, caps, caplens)
+            # print("Encoded img shape:", img.shape)
+            scores, form_sorted, decode_lengths, alphas, sort_ind = decoder(img, form, form_len)
+            
 
             # Since we decoded starting with <start>, the targets are all words after <start>, up to <end>
-            targets = caps_sorted[:, 1:]
+            targets = form_sorted[:, 1:]
+            targets_copy = targets.clone()
 
             # Remove timesteps that we didn't decode at, or are pads
             # pack_padded_sequence is an easy trick to do this
             scores_copy = scores.clone()
-            scores, _ = pack_padded_sequence(scores, decode_lengths, batch_first=True)
-            targets, _ = pack_padded_sequence(targets, decode_lengths, batch_first=True)
-
+            scores = pack_padded_sequence(scores, decode_lengths, batch_first=True).data
+            targets = pack_padded_sequence(targets, decode_lengths, batch_first=True).data
+            
             # Calculate loss
             loss = criterion(scores, targets)
             # Add doubly stochastic attention regularization
@@ -161,8 +166,12 @@ def validate(val_loader, encoder, decoder, criterion, vocab):
 
 
             # References
-            true_form = [w for w in form if w not in {vocab["<start>"], vocab["<pad>"]}]
-            references.append(true_form)
+            targets_copy = targets_copy.tolist()
+            temp_ref = list()
+            for i, target in enumerate(targets_copy):
+                temp_ref.append(targets_copy[:decode_lengths[i]])
+            references.extend(temp_ref)
+            # print("ref:", references[0])
 
             # Predictions
             _, preds = torch.max(scores_copy, dim=2)
@@ -172,6 +181,8 @@ def validate(val_loader, encoder, decoder, criterion, vocab):
                 temp_preds.append(preds[j][:decode_lengths[j]])  # remove pads
             preds = temp_preds
             predictions.extend(preds)
+            # print("pred shape: ({}, {})".format(len(predictions), len(predictions[0])))
+            # print("pred:", predictions[0])
 
             assert len(references) == len(predictions)
 
@@ -190,14 +201,14 @@ if __name__ == '__main__':
     print("Loading model...")
     device = torch.device("cuda" if use_cuda and torch.cuda.is_available() else "cpu")
     encoder, decoder, encoder_optimizer, decoder_optimizer = load_model(vocab_size)
-    loss = nn.CrossEntropyLoss().to(device)
+    criterion = nn.CrossEntropyLoss().to(device)
 
     best_bleu = 0
     for epoch in range(0, 1): # train_config["max_epoch"]
         train(train_loader, 
             encoder=encoder, 
             decoder=decoder, 
-            criterion=loss,
+            criterion=criterion,
             encoder_optimizer=encoder_optimizer,
             decoder_optimizer=decoder_optimizer,
             epoch=epoch)

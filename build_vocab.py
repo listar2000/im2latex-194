@@ -41,11 +41,11 @@ def build_vocab(min_freq = preprocess_config['min_freq']):
     vocab = Vocab()
     counter = Counter()
 
-    formulas_file = join(DATA_FOLDER_PATH, 'im2latex_formulas.norm.lst')
+    formulas_file = join(DATA_FOLDER_PATH, 'formulas.norm.lst') # im2latex_formulas.norm.lst
     with open(formulas_file, 'r') as f:
         formulas = [formula.strip('\n') for formula in f.readlines()]
 
-    with open(join(DATA_FOLDER_PATH, 'im2latex_train_filter.lst'), 'r') as f:
+    with open(join(DATA_FOLDER_PATH, 'train_filter.lst'), 'r') as f: # im2latex_train_filter.lst
         for line in f:
             _, idx = line.strip('\n').split()
             idx = int(idx)
