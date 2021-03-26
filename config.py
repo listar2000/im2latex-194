@@ -26,12 +26,13 @@ train_config = {
     'max_epoch': 10,
     # 1) encoder (CNN) related configs
     # see `backbone_map` in encoder.py for a list of supported CNN backbones
-    'cnn_backbone': 'ResNet101',
+    'cnn_backbone': 'ResNet101', # {'ResNet101', 'AlexNet'}
     'encoded_img_size': 14,
-    'batch_size': 32,
+    'batch_size': 20,
 
     # 2) attention related configs
     'attention_dim': 2048,
+    'alpha_c': 1, # regularization parameter for 'doubly stochastic attention'
 
     # 3) decoder (LSTM) related configs
     'decoder_dim': 512
