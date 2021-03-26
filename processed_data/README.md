@@ -1,1 +1,0 @@
-This is the folder for your pre-processed data, including vocabulary & images files in .pkl or .hdf5 formats

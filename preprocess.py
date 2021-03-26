@@ -32,6 +32,12 @@ from build_vocab import load_vocab, Vocab
 import numpy as np
 import json
 
+IMG_SIZES = np.array([(64, 320), (64, 384), (64, 480), \
+    (64, 224), (64, 256), (32, 320), (64, 192), \
+    (64, 160), (32, 192), (32, 224), (32, 160), \
+    (32, 128), (32, 256), (64, 128), (32, 384), \
+    (32, 480), (96, 384), (128, 480)])
+
 def preprocess(store_pkl, train=True, val=True, test=True, max_len=preprocess_config['max_len']):
     formulas_file = join(DATA_FOLDER_PATH, "im2latex_formulas.norm.lst")
     with open(formulas_file, 'r') as f:
@@ -65,6 +71,15 @@ def caption_embed(word_map, caption, max_len, padding=preprocess_config['padding
     # return both the encoded caption (maybe padded) and the original length
     return encoded_cap, len(caption)
 
+def adaptive_transform(img, old_size):
+    # using numpy to accelerates
+    old_size = np.array(old_size)
+    # find the accepted size that is closest to current size in terms of euclidean distance
+    best_i = np.argmin(np.sum((IMG_SIZES - old_size) ** 2, axis=1))
+    new_size = tuple(IMG_SIZES[best_i])
+    img = imresize(img, new_size)
+    return img, new_size
+
 def preprocess_hdf(split, formulas, word_map, max_len):
     assert split in ["train", "validate", "test"]
 
@@ -74,34 +89,41 @@ def preprocess_hdf(split, formulas, word_map, max_len):
     split_fn = "im2latex_{}_filter.lst".format(split)
     split_fp = join(DATA_FOLDER_PATH, split_fn)
 
-    img_names, formula_ids = [], []
-    print("loading file names & formula id from {}...".format(split_fn))
+    img_by_size, formula_by_size = {}, {}
+    print("loading images & formula id from {}...".format(split_fn))
     with open(split_fp, 'r') as f:
         for line in tqdm(f):
             img_name, formula_id = line.strip('\n').split()
-            img_names.append(img_name)
-            formula_ids.append(int(formula_id))
+            cap = formulas[int(formula_id)]
+            cap_len = len(cap.split())
+            if cap_len <= max_len:
+                img = imread(join(IMG_FOLDER_PATH, img_name))
+                img_size = tuple(img.shape[:2])
+                # update when the size is not in the list
+                if img_size not in IMG_SIZES:
+                    img, img_size = adaptive_transform(img, img_size)
+                img_lst = img_by_size.setdefault(img_size, [])
+                fml_lst = formula_by_size.setdefault(img_size, [])
 
-    caption_info = []
-    print("writing images to " + split + '_IMAGES' + '.hdf5')
-    with h5py.File(join(PROCESSED_FOLDER_PATH, split + '_IMAGES' + '.hdf5'), 'a') as h:
-        images = h.create_dataset('images', (len(img_names), 3, 256, 256), dtype='uint8')
-        # this is a list of tuples with (encoded caption, caption length) stored as json file   
-        for i, img_name in enumerate(tqdm(img_names)):
-            img = imread(join(IMG_FOLDER_PATH, img_name))
-            img = imresize(img, (256, 256))
-            img = img.transpose(2, 0, 1)
-            assert img.shape[0] == 3
-            assert np.max(img) <= 255
+                img = img.transpose(2, 0, 1)
+                assert img.shape[0] == 3 and np.max(img) <= 255
+                img_lst.append(img)
+                fml_lst.append(formula_id)
 
-            # Save image to HDF5 file
-            images[i] = img
-
-            caption_info.append(caption_embed(word_map, formulas[formula_ids[i]]))
+    # storing images to different bins
+    print("writing images to " + str.upper(split) + '_IMAGES' + '.hdf5')
+    with h5py.File(join(PROCESSED_FOLDER_PATH, str.upper(split) + '_IMAGES' + '.hdf5'), 'a') as h:
+        for i, size in tqdm(enumerate(img_by_size)):
+            size_str = "{}x{}".format(size[0], size[1])
+            img_lst = img_by_size[size]
+            h.create_dataset(size_str, data=img_lst)
+            print("==> successfully writing {} images of size {}".format(len(img_lst), size_str))
     
+    formula_by_size = {"{}x{}".format(k[0], k[1]):v for (k, v) in formula_by_size.items()}
+    print("saving caption indices to {}_CAPTIONS.json".format(str.upper(split)))
     # Save encoded captions and their lengths to JSON files
-    with open(join(PROCESSED_FOLDER_PATH, split + '_CAPTIONS' + '.json'), 'w') as j:
-        json.dump(caption_info, j)
+    with open(join(PROCESSED_FOLDER_PATH, str.upper(split) + '_CAPTIONS' + '.json'), 'w') as j:
+        json.dump(formula_by_size, j)
 
 def preprocess_pkl(split, formulas, word_map, max_len):
     assert split in ["train", "validate", "test"]
@@ -134,13 +156,13 @@ def preprocess_pkl(split, formulas, word_map, max_len):
     print("loading completed, scanned a total of {} files, saved {} files with token length < {}"\
         .format(tot, val, max_len))
 
-    out_file = join(PROCESSED_FOLDER_PATH, "{}_IMAGES.pkl".format(split))
+    out_file = join(PROCESSED_FOLDER_PATH, "{}_IMAGES.pkl".format(str.upper(split)))
     with open(out_file, 'wb') as w:
         pkl.dump(images, w)
 
     print("saved {} images to {}".format(split, out_file))
     # Save encoded captions and their lengths to JSON files
-    with open(join(PROCESSED_FOLDER_PATH, split + '_CAPTIONS' + '.json'), 'w') as j:
+    with open(join(PROCESSED_FOLDER_PATH, str.upper(split) + '_CAPTIONS' + '.json'), 'w') as j:
         json.dump(caption_info, j)
 
 def img_size(pair):
@@ -148,5 +170,5 @@ def img_size(pair):
     return tuple(img.size())
 
 if __name__ == '__main__':
-    preprocess(True)
+    preprocess(False)
 
