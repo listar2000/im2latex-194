@@ -22,7 +22,6 @@ the implementation is inspired by a project for the image captioning task at
 from os.path import join
 import pickle as pkl
 
-from torch.serialization import validate_cuda_device
 from config import DATA_FOLDER_PATH, IMG_FOLDER_PATH, PROCESSED_FOLDER_PATH, preprocess_config
 import h5py
 from tqdm import tqdm
