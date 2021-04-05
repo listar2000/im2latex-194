@@ -5,10 +5,12 @@
 
 from typing import Iterable, Iterator, Optional
 import torch
+from torch._C import dtype
 from config import DATA_FOLDER_PATH, PROCESSED_FOLDER_PATH
 from os.path import join
 import h5py, json
 import numpy as np
+from build_vocab import load_vocab, Vocab
 
 class LatexDataloader(Iterable):
     """
@@ -16,7 +18,11 @@ class LatexDataloader(Iterable):
     split: one of the `train`, `validate`, `test`
     transform: optional, recommended to be from torchvision.transforms
     shuffle: whether to shuffle the minibatches (both image bins and images within a bin), default true
-    batch_size: size of a minibatch, recommended to be 
+    batch_size: size of a minibatch, recommended to be 2**i where i is a natural number
+
+    !! RETURN VALUES: a tuple of size three (images_data, latex_data, latex_lens)
+    1. images_data
+    a 
     """
     def __init__(self, split: str, transform=None, shuffle: bool=True, batch_size: int=16):
         self.split = str.upper(split)
@@ -68,6 +74,8 @@ class LatexDataIterator(Iterator):
             np.random.shuffle(self.bin_order)
         
         self._switch_bin(self.bin_order[0])
+        # loading the vocabulary from preprocessed training formulas
+        self.vocab: Vocab = load_vocab()
 
     def _switch_bin(self, bin_num):
         self.curr_bin_size = self.loader.bin_sizes[bin_num]
@@ -79,6 +87,31 @@ class LatexDataIterator(Iterator):
         self.item_order = np.arange(self.curr_bin_size)
         if self.loader.shuffle:
             np.random.shuffle(self.item_order)
+
+    """
+    input: a formula 
+    """
+    def _word_embed(self, formula):
+        embedded = [0] # a start
+        for word in formula:
+            if word in self.vocab.sign2id:
+                embedded.append(self.vocab.sign2id[word])
+            else:
+                embedded.append(3) # unknown
+        embedded.append(2)
+
+        return embedded
+
+    def _pad_formulas(self, formulas, latex_lens, latex_order):
+        # remember the start & the end added
+        max_len = latex_lens[latex_order[-1]] + 2
+        padded = np.ones((len(latex_lens), max_len), dtype=np.int16)
+
+        for i, o in enumerate(latex_order):
+            formula_len = latex_lens[o] + 2 
+            padded[i, :formula_len] = formulas[o]  
+
+        return padded
 
     def __iter__(self):
         return self
@@ -112,31 +145,36 @@ class LatexDataIterator(Iterator):
             images_data = self.loader.transform(images_data)
 
         latex_line_indices = self.curr_latex[idx]
-        latex_data = []
+        latex_data, latex_lens = [], []
         for index in latex_line_indices:
-            latex_data.append(self.loader.formulas[int(index)])
+            formula = self.loader.formulas[int(index)]
+            latex_data.append(self._word_embed(formula))
+            latex_lens.append(len(formula))
 
-        return (images_data, latex_data)
+        latex_lens = np.array(latex_lens, dtype=np.int16)
+        latex_order = np.argsort(latex_lens)
+
+        latex_data = self._pad_formulas(latex_data, latex_lens, latex_order)
+        latex_data = torch.from_numpy(latex_data)
+        latex_lens = torch.from_numpy(latex_lens)
+
+        return (images_data, latex_data, latex_lens)
+
 
 if __name__ == '__main__':
-    # import time
-    # dataloader = LatexDataloader("validate", batch_size=16, shuffle=True)
-    # start = time.time()
-    # j = 0
-    # for a, b, c in dataloader:
-    #     j += len(b)
-
-    # print(time.time() - start)
-    # print(j)
-    # print(dataloader.dataset_size)
+    import time
     dataloader = LatexDataloader("validate", batch_size=16, shuffle=True)
+    start = time.time()
+    j = 0
+    for a, b, c in dataloader:
+        j += len(c)
 
-    dataIter = iter(dataloader)
-    for i in range(3):
-        images, latex_data = next(dataIter)
-        print(latex_data[0])
+    print(time.time() - start)
+    print(j)
+    print(dataloader.dataset_size)
+    # dataloader = LatexDataloader("validate", batch_size=16, shuffle=True)
 
-    # the standard way to run in training
-    for image, latex in dataloader:
-        # do something here
-        break
+    # dataIter = iter(dataloader)
+    # for i in range(3):
+    #     images, latex_data, index_lens = next(dataIter)
+    #     print(latex_data[0])
