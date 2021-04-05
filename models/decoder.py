@@ -7,7 +7,7 @@ https://github.com/sgrvinod/a-PyTorch-Tutorial-to-Image-Captioning/blob/master/m
 import torch
 from torch import nn
 import torchvision
-from attention import Attention
+from models.attention import Attention
 
 class DecoderWithAttention(nn.Module):
     """
