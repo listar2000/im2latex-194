@@ -5,7 +5,7 @@ import os
 
 # data path related configs
 DATA_FOLDER_PATH = './data'
-IMG_FOLDER_PATH = os.path.join(DATA_FOLDER_PATH, 'formula_images_processed') # 'formula_images_processed' for full data, 'images_processed' for sample data
+# IMG_FOLDER_PATH = os.path.join(DATA_FOLDER_PATH, 'formula_images_processed')
 PROCESSED_FOLDER_PATH = './processed_data'
 
 preprocess_config = {
@@ -21,7 +21,7 @@ preprocess_config = {
 
 train_config = {
     'use_row': False,
-    'use_cuda': False,
+    'device': "cuda" if torch.cuda.is_available() else "cpu",
     'num_workers': 4,
     'lr': 3e-4,
     'max_epoch': 1,

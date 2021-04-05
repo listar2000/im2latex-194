@@ -4,7 +4,7 @@ from torch import nn
 # configuration file
 from config import train_config
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = train_config["device"]
 
 class RowEncoder(nn.Module):
     
@@ -27,7 +27,7 @@ class RowEncoder(nn.Module):
         b, h, w, c = images.shape
 
         images = images.contiguous().view(b*h, w, c)
-        init_hidden = (torch.zeros(2, b*h, self.hidden_size), torch.zeros(2, b*h, self.hidden_size))
+        init_hidden = (torch.zeros(2, b*h, self.hidden_size).to(device), torch.zeros(2, b*h, self.hidden_size).to(device))
         encoded_outputs, (hn, cn) = self.lstm(images, init_hidden)
         # encoded_outputs -> (b * h, w, 2 * hidden_size)
         encoded_outputs = encoded_outputs.view(b, h, w, -1).contiguous()
@@ -52,7 +52,7 @@ class RowEncoder(nn.Module):
                          for pos in range(n_position)])
         position_enc[1:, 0::2] = np.sin(position_enc[1:, 0::2])
         position_enc[1:, 1::2] = np.cos(position_enc[1:, 1::2])
-        return x + torch.from_numpy(position_enc).type(torch.FloatTensor)
+        return x + torch.from_numpy(position_enc).type(torch.FloatTensor).to(device)
 
 
 

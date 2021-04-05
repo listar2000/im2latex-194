@@ -7,43 +7,7 @@ https://github.com/sgrvinod/a-PyTorch-Tutorial-to-Image-Captioning/blob/master/m
 import torch
 from torch import nn
 import torchvision
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-class Attention(nn.Module):
-    """
-    Attention Network.
-    """
-
-    def __init__(self, encoder_dim, decoder_dim, attention_dim):
-        """
-        :param encoder_dim: feature size of encoded images
-        :param decoder_dim: size of decoder's RNN
-        :param attention_dim: size of the attention network
-        """
-        super(Attention, self).__init__()
-        self.encoder_att = nn.Linear(encoder_dim, attention_dim)  # linear layer to transform encoded image
-        self.decoder_att = nn.Linear(decoder_dim, attention_dim)  # linear layer to transform decoder's output
-        self.full_att = nn.Linear(attention_dim, 1)  # linear layer to calculate values to be softmax-ed
-        self.relu = nn.ReLU()
-        self.softmax = nn.Softmax(dim=1)  # softmax layer to calculate weights
-
-    def forward(self, images, decoder_hidden):
-        """
-        Forward propagation.
-        :param images: encoded images, a tensor of dimension (batch_size, num_pixels, encoder_dim)
-        :param decoder_hidden: previous decoder output, a tensor of dimension (batch_size, decoder_dim)
-        :return: attention weighted encoding, weights
-        """
-        att1 = self.encoder_att(images)  # (batch_size, num_pixels, attention_dim)
-        att2 = self.decoder_att(decoder_hidden)  # (batch_size, attention_dim)
-        att = self.full_att(self.relu(att1 + att2.unsqueeze(1))).squeeze(2)  # (batch_size, num_pixels)
-        alpha = self.softmax(att)  # (batch_size, num_pixels)
-        attention_weighted_encoding = (images * alpha.unsqueeze(2)).sum(dim=1)  # (batch_size, encoder_dim)
-
-        return attention_weighted_encoding, alpha
-
+from attention import Attention
 
 class DecoderWithAttention(nn.Module):
     """
@@ -121,7 +85,7 @@ class DecoderWithAttention(nn.Module):
         Input:
             > images: encoded images, a tensor of dimension (batch_size, enc_image_size, enc_image_size, encoder_dim)
             > formulas: encoded formulas, a tensor of dimension (batch_size, max_formula_length)
-            > formula_lengths: formula lengths, a tensor of dimension (batch_size, 1)
+            > formula_lengths: formula lengths, a tensor of dimension (batch_size)
         Output:
             > scores: scores for vocabulary -> (batch_size, max_formula_length, vocab_size)
             > alphas: weights -> (batch_size, max_formula_length, num_pixels)
@@ -134,7 +98,6 @@ class DecoderWithAttention(nn.Module):
         # Flatten image
         images = images.view(batch_size, -1, encoder_dim)  # (batch_size, num_pixels, encoder_dim)
         num_pixels = images.size(1)
-        formula_lengths = formula_lengths.squeeze(1)
 
         # (Commented out - Already sorted in dataloader)
         # # Sort input data by decreasing lengths; why? apparent below

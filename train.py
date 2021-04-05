@@ -3,41 +3,29 @@ Adapted from
 https://github.com/sgrvinod/a-PyTorch-Tutorial-to-Image-Captioning/blob/master/train.py
 
 """
-
+import argparse
 from config import PROCESSED_FOLDER_PATH, train_config
-from data import Im2LatexDataset
+from dataset import LatexDataloader
 from build_vocab import load_vocab, Vocab, START_TOKEN, PAD_TOKEN
 
-from encoder import Encoder
-from row_encoder import RowEncoder
-from decoder import DecoderWithAttention
+from models.encoder import Encoder
+from models.row_encoder import RowEncoder
+from models.decoder import DecoderWithAttention
 
 import time
+from tqdm import tqdm
 from nltk.translate.bleu_score import corpus_bleu, SmoothingFunction
 import torch
 from torch import nn
-from torch.utils.data import DataLoader
 import torch.optim as optim
 from torch.nn.utils.rnn import pack_padded_sequence
 from utils import *
 
-use_cuda = train_config['use_cuda']
-device = torch.device("cuda" if use_cuda and torch.cuda.is_available() else "cpu")
+device = train_config['device']
 
-
-def load_data():
-    train_loader = DataLoader(Im2LatexDataset(PROCESSED_FOLDER_PATH, 'train'),
-        batch_size=train_config['batch_size'],
-        shuffle=True,
-        collate_fn = collate_fn,
-        pin_memory=True if train_config['use_cuda'] else False,
-        num_workers=train_config['num_workers'])
-    val_loader = DataLoader(Im2LatexDataset(PROCESSED_FOLDER_PATH, 'validate'),
-        batch_size=train_config['batch_size'],
-        shuffle=True,
-        collate_fn = collate_fn,
-        pin_memory=True if train_config['use_cuda'] else False,
-        num_workers=train_config['num_workers'])
+def load_data(sample=False):
+    train_loader = LatexDataloader("train", batch_size=16, shuffle=True, sample=sample)
+    val_loader = LatexDataloader("validate", batch_size=16, shuffle=True, sample=sample)
     return train_loader, val_loader
 
 def load_model(vocab_size, row):
@@ -77,64 +65,66 @@ def train(epoch, train_loader, criterion,
     top5accs = AverageMeter()  # top5 accuracy
 
     start = time.time()
-    for i, (img, form, form_len) in enumerate(train_loader):
-        data_time.update(time.time() - start)
+    with tqdm(train_loader, unit="batch") as tepoch:
+        for i, (img, form, form_len) in enumerate(tepoch):
+            tepoch.set_description(f"Epoch {epoch}")
+            data_time.update(time.time() - start)
 
-        # Move to GPU, if available
-        img = img.to(device)
-        form = form.to(device)
-        form_len = form_len.to(device)
+            # Move to GPU, if available
+            img = img.to(device)
+            form = form.to(device)
+            form_len = form_len.to(device)
 
-        # Forward proprogation
-        img = encoder(img)
-        if row_encoder is not None:
-            img = row_encoder(img)
-        scores, alphas = decoder(img, form, form_len) 
+            # Forward proprogation
+            img = encoder(img)
+            if row_encoder is not None:
+                img = row_encoder(img)
+            scores, alphas = decoder(img, form, form_len) 
 
-        # Remove <start> token   
-        targets = form[:, 1:]
+            # Remove <start> token   
+            targets = form[:, 1:]
 
-        # A convenient way of removing <end> and <pad> tokens
-        decode_lengths = form_len.squeeze(1) # Length of the original sequence, not including start, end, or padding
-        scores = pack_padded_sequence(scores, decode_lengths, batch_first=True).data
-        targets = pack_padded_sequence(targets, decode_lengths, batch_first=True).data
+            # A convenient way of removing <end> and <pad> tokens
+            decode_lengths = form_len # Length of the original sequence, not including start, end, or padding
+            scores = pack_padded_sequence(scores, decode_lengths.cpu(), batch_first=True).data.to(device)
+            targets = pack_padded_sequence(targets, decode_lengths.cpu(), batch_first=True).data.to(device)
 
-        # Calculate loss
-        loss = criterion(scores, targets)
-        # Add doubly stochastic attention regularization
-        loss += train_config['alpha_c'] * ((1. - alphas.sum(dim=1)) ** 2).mean()
+            # Calculate loss
+            loss = criterion(scores, targets)
+            # Add doubly stochastic attention regularization
+            loss += train_config['alpha_c'] * ((1. - alphas.sum(dim=1)) ** 2).mean()
 
-        # Back propagation
-        decoder_optimizer.zero_grad()
-        if row_encoder_optimizer is not None:
-            row_encoder_optimizer.zero_grad()
-        encoder_optimizer.zero_grad()
-        loss.backward()
+            # Back propagation
+            decoder_optimizer.zero_grad()
+            if row_encoder_optimizer is not None:
+                row_encoder_optimizer.zero_grad()
+            encoder_optimizer.zero_grad()
+            loss.backward()
 
-        # Update weights
-        decoder_optimizer.step()
-        if row_encoder_optimizer is not None:
-            row_encoder_optimizer.step()
-        encoder_optimizer.step()
+            # Update weights
+            decoder_optimizer.step()
+            if row_encoder_optimizer is not None:
+                row_encoder_optimizer.step()
+            encoder_optimizer.step()
 
-        # Update performance metrics
-        top5 = accuracy(scores, targets, 5)
-        losses.update(loss.item(), sum(decode_lengths))
-        top5accs.update(top5, sum(decode_lengths))
-        batch_time.update(time.time() - start)
-        start = time.time()
+            # Update performance metrics
+            top5 = accuracy(scores, targets, 5)
+            losses.update(loss.item(), sum(decode_lengths))
+            top5accs.update(top5, sum(decode_lengths))
+            batch_time.update(time.time() - start)
+            start = time.time()
 
-        # Print every 5 batches
-        if i % 5 == 0:
-            print('Epoch: [{0}][{1}/{2}]\t'
-                  'Batch Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                  'Data Load Time {data_time.val:.3f} ({data_time.avg:.3f})\t'
-                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                  'Top-5 Accuracy {top5.val:.3f} ({top5.avg:.3f})'.format(epoch, i, len(train_loader),
-                                                                          batch_time=batch_time,
-                                                                          data_time=data_time, loss=losses,
-                                                                          top5=top5accs))
-        
+            # Print every 100 batches
+            if i % 100 == 0:
+                print('Epoch: [{0}][{1}/{2}]\t'
+                      'Batch Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                      'Data Load Time {data_time.val:.3f} ({data_time.avg:.3f})\t'
+                      'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                      'Top-5 Accuracy {top5.val:.3f} ({top5.avg:.3f})'.format(epoch, i, len(train_loader),
+                                                                              batch_time=batch_time,
+                                                                              data_time=data_time, loss=losses,
+                                                                              top5=top5accs))
+
 
 def validate(val_loader, encoder, row_encoder, decoder, criterion, vocab):
     decoder.eval()
@@ -151,7 +141,7 @@ def validate(val_loader, encoder, row_encoder, decoder, criterion, vocab):
     references = list() # True formulas
     predictions = list() # Predictions
     with torch.no_grad():
-        for i, (img, form, form_len) in enumerate(val_loader):
+        for i, (img, form, form_len) in enumerate(tqdm(val_loader), unit="val_batch"):
             # Move to GPU, if available
             img = img.to(device)
             form = form.to(device)
@@ -171,10 +161,10 @@ def validate(val_loader, encoder, row_encoder, decoder, criterion, vocab):
             targets_copy = targets.clone()
 
             # A convenient way of removing <end> and <pad> tokens
-            decode_lengths = form_len.squeeze(1) # Length of the original sequence, not including start, end, or padding
-            scores = pack_padded_sequence(scores, decode_lengths, batch_first=True).data
-            targets = pack_padded_sequence(targets, decode_lengths, batch_first=True).data
-            
+            decode_lengths = form_len # Length of the original sequence, not including start, end, or padding
+            scores = pack_padded_sequence(scores, decode_lengths.cpu(), batch_first=True).data.to(device)
+            targets = pack_padded_sequence(targets, decode_lengths.cpu(), batch_first=True).data.to(device)
+
             # Calculate loss
             loss = criterion(scores, targets)
             # Add doubly stochastic attention regularization
@@ -188,8 +178,8 @@ def validate(val_loader, encoder, row_encoder, decoder, criterion, vocab):
 
             start = time.time()
 
-            # print every 5 batches
-            if i % 5 == 0:
+            # print every 100 batches
+            if i % 100 == 0:
                 print('Validation: [{0}/{1}]\t'
                       'Batch Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
@@ -223,11 +213,15 @@ def validate(val_loader, encoder, row_encoder, decoder, criterion, vocab):
     return bleu
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Training...")
+    parser.add_argument("--sample", action="store_true", default=False, help="Use sample data or not")
+    args = parser.parse_args()
+
     vocab = load_vocab()
     vocab_size = len(vocab)
     use_row = train_config['use_row']
     print("Loading data...")
-    train_loader, val_loader = load_data()
+    train_loader, val_loader = load_data(args.sample)
 
     print("Loading model...")
     encoder, row_encoder, decoder, encoder_optimizer, row_encoder_optimizer, decoder_optimizer = load_model(vocab_size, row=use_row)
