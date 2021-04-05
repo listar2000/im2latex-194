@@ -1,17 +1,25 @@
+"""
+Adapted from 
+https://github.com/sgrvinod/a-PyTorch-Tutorial-to-Image-Captioning/blob/master/train.py
+
+"""
+
 from config import PROCESSED_FOLDER_PATH, train_config
 from data import Im2LatexDataset
-from encoder import Encoder
-from decoder import DecoderWithAttention
 from build_vocab import load_vocab, Vocab, START_TOKEN, PAD_TOKEN
-from utils import *
+
+from encoder import Encoder
+from row_encoder import RowEncoder
+from decoder import DecoderWithAttention
 
 import time
-from nltk.translate.bleu_score import corpus_bleu
+from nltk.translate.bleu_score import corpus_bleu, SmoothingFunction
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
 import torch.optim as optim
 from torch.nn.utils.rnn import pack_padded_sequence
+from utils import *
 
 use_cuda = train_config['use_cuda']
 device = torch.device("cuda" if use_cuda and torch.cuda.is_available() else "cpu")
@@ -32,22 +40,37 @@ def load_data():
         num_workers=train_config['num_workers'])
     return train_loader, val_loader
 
-def load_model(vocab_size):
+def load_model(vocab_size, row):
     encoder = Encoder()
+    encoder = encoder.to(device)
     encoder.fine_tune()
     encoder_optimizer = optim.Adam(encoder.parameters(), lr=train_config["lr"])
 
+    if row:
+        row_encoder = RowEncoder()
+        row_encoder.to(device)
+        row_encoder_optimizer = optim.Adam(row_encoder.parameters(), lr=train_config["lr"])
+    else:
+        row_encoder = None
+        row_encoder_optimizer = None
+
     decoder = DecoderWithAttention(vocab_size=vocab_size)
+    decoder = decoder.to(device)
     decoder_optimizer = optim.Adam(decoder.parameters(), lr=train_config["lr"])
 
-    encoder = encoder.to(device)
-    decoder = decoder.to(device)
-    return encoder, decoder, encoder_optimizer, decoder_optimizer
+    return encoder, row_encoder, decoder, encoder_optimizer, row_encoder_optimizer, decoder_optimizer
 
-def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_optimizer, epoch):
+def train(epoch, train_loader, criterion, 
+          encoder, encoder_optimizer,
+          decoder, decoder_optimizer, 
+          row_encoder=None, row_encoder_optimizer=None):
+    # Set models to training mode.
     encoder.train()
+    if row_encoder is not None:
+        row_encoder.train()
     decoder.train()
 
+    # Initialize performance metrics.
     batch_time = AverageMeter()  # forward prop. + back prop. time
     data_time = AverageMeter()  # data loading time
     losses = AverageMeter()  # loss (per word decoded)
@@ -61,18 +84,20 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
         img = img.to(device)
         form = form.to(device)
         form_len = form_len.to(device)
-        # print("formula length:", len(form[0]), form_len[0])
 
-        # Forward proprgation
+        # Forward proprogation
         img = encoder(img)
-        scores, form_sorted, decode_lengths, alphas, sort_ind = decoder(img, form, form_len)    
-        targets = form_sorted[:, 1:]
-        # print("not padded:", scores.shape, targets.shape, decode_lengths)
+        if row_encoder is not None:
+            img = row_encoder(img)
+        scores, alphas = decoder(img, form, form_len) 
 
+        # Remove <start> token   
+        targets = form[:, 1:]
+
+        # A convenient way of removing <end> and <pad> tokens
+        decode_lengths = form_len.squeeze(1) # Length of the original sequence, not including start, end, or padding
         scores = pack_padded_sequence(scores, decode_lengths, batch_first=True).data
         targets = pack_padded_sequence(targets, decode_lengths, batch_first=True).data
-        
-        # print("after padding:", scores.shape, targets.shape)
 
         # Calculate loss
         loss = criterion(scores, targets)
@@ -81,22 +106,26 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
 
         # Back propagation
         decoder_optimizer.zero_grad()
+        if row_encoder_optimizer is not None:
+            row_encoder_optimizer.zero_grad()
         encoder_optimizer.zero_grad()
         loss.backward()
 
         # Update weights
-        encoder_optimizer.step()
         decoder_optimizer.step()
+        if row_encoder_optimizer is not None:
+            row_encoder_optimizer.step()
+        encoder_optimizer.step()
 
-        # Keep track of metrics
+        # Update performance metrics
         top5 = accuracy(scores, targets, 5)
         losses.update(loss.item(), sum(decode_lengths))
         top5accs.update(top5, sum(decode_lengths))
         batch_time.update(time.time() - start)
         start = time.time()
 
-        # Print every 100 batches
-        if i % 100 == 0:
+        # Print every 5 batches
+        if i % 5 == 0:
             print('Epoch: [{0}][{1}/{2}]\t'
                   'Batch Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Data Load Time {data_time.val:.3f} ({data_time.avg:.3f})\t'
@@ -107,10 +136,13 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
                                                                           top5=top5accs))
         
 
-def validate(val_loader, encoder, decoder, criterion, vocab):
+def validate(val_loader, encoder, row_encoder, decoder, criterion, vocab):
     decoder.eval()
     encoder.eval()
+    if row_encoder is not None:
+        row_encoder.eval()
 
+    # Initialize performance metrics.
     batch_time = AverageMeter()
     losses = AverageMeter()
     top5accs = AverageMeter()
@@ -119,27 +151,27 @@ def validate(val_loader, encoder, decoder, criterion, vocab):
     references = list() # True formulas
     predictions = list() # Predictions
     with torch.no_grad():
-        for i, (img, form, form_len) in enumerate(train_loader):
+        for i, (img, form, form_len) in enumerate(val_loader):
             # Move to GPU, if available
             img = img.to(device)
             form = form.to(device)
             form_len = form_len.to(device)
-            
+
             # print("Original img shape:", img.shape)
 
             # Forward proprgation
             img = encoder(img)
-            # print("Encoded img shape:", img.shape)
-            scores, form_sorted, decode_lengths, alphas, sort_ind = decoder(img, form, form_len)
-            
+            if row_encoder is not None:
+                img = row_encoder(img)
+            scores, alphas = decoder(img, form, form_len)
+            scores_copy = scores.clone()
 
             # Since we decoded starting with <start>, the targets are all words after <start>, up to <end>
-            targets = form_sorted[:, 1:]
+            targets = form[:, 1:]
             targets_copy = targets.clone()
 
-            # Remove timesteps that we didn't decode at, or are pads
-            # pack_padded_sequence is an easy trick to do this
-            scores_copy = scores.clone()
+            # A convenient way of removing <end> and <pad> tokens
+            decode_lengths = form_len.squeeze(1) # Length of the original sequence, not including start, end, or padding
             scores = pack_padded_sequence(scores, decode_lengths, batch_first=True).data
             targets = pack_padded_sequence(targets, decode_lengths, batch_first=True).data
             
@@ -148,7 +180,7 @@ def validate(val_loader, encoder, decoder, criterion, vocab):
             # Add doubly stochastic attention regularization
             loss += train_config['alpha_c'] * ((1. - alphas.sum(dim=1)) ** 2).mean()
 
-            # Keep track of metrics
+            # Update performance metrics
             losses.update(loss.item(), sum(decode_lengths))
             top5 = accuracy(scores, targets, 5)
             top5accs.update(top5, sum(decode_lengths))
@@ -156,8 +188,8 @@ def validate(val_loader, encoder, decoder, criterion, vocab):
 
             start = time.time()
 
-            # print every 100 batches
-            if i % 100 == 0:
+            # print every 5 batches
+            if i % 5 == 0:
                 print('Validation: [{0}/{1}]\t'
                       'Batch Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
@@ -167,58 +199,61 @@ def validate(val_loader, encoder, decoder, criterion, vocab):
 
             # References
             targets_copy = targets_copy.tolist()
-            temp_ref = list()
-            for i, target in enumerate(targets_copy):
-                temp_ref.append(targets_copy[:decode_lengths[i]])
-            references.extend(temp_ref)
-            # print("ref:", references[0])
+            refs = idx2formulas(targets_copy, vocab)
+            refs = [[x] for x in refs]
+            references.append(refs)
 
             # Predictions
-            _, preds = torch.max(scores_copy, dim=2)
+            _, preds = torch.max(scores_copy, dim=2) # return indices of max scores
             preds = preds.tolist()
-            temp_preds = list()
-            for j, p in enumerate(preds):
-                temp_preds.append(preds[j][:decode_lengths[j]])  # remove pads
-            preds = temp_preds
-            predictions.extend(preds)
-            # print("pred shape: ({}, {})".format(len(predictions), len(predictions[0])))
-            # print("pred:", predictions[0])
+            preds = idx2formulas(preds, vocab)
+            predictions.append(preds)
 
-            assert len(references) == len(predictions)
+            assert len(refs) == len(preds)
 
         # Calculate BLEU-4 scores
-        bleu = corpus_bleu(references, predictions)
-        print("BLEU:", bleu)
+        # print("Ref:")
+        # print(references)
+        # print("\n")
+        # print("Pred:")
+        # print(predictions)
+
+        # bleu = corpus_bleu(references, predictions)
+        # print("BLEU-4:", bleu)
     return bleu
 
 if __name__ == '__main__':
     vocab = load_vocab()
     vocab_size = len(vocab)
-    use_cuda = train_config['use_cuda']
+    use_row = train_config['use_row']
     print("Loading data...")
     train_loader, val_loader = load_data()
 
     print("Loading model...")
-    device = torch.device("cuda" if use_cuda and torch.cuda.is_available() else "cpu")
-    encoder, decoder, encoder_optimizer, decoder_optimizer = load_model(vocab_size)
+    encoder, row_encoder, decoder, encoder_optimizer, row_encoder_optimizer, decoder_optimizer = load_model(vocab_size, row=use_row)
     criterion = nn.CrossEntropyLoss().to(device)
 
     best_bleu = 0
-    for epoch in range(0, 1): # train_config["max_epoch"]
-        train(train_loader, 
-            encoder=encoder, 
-            decoder=decoder, 
-            criterion=criterion,
-            encoder_optimizer=encoder_optimizer,
-            decoder_optimizer=decoder_optimizer,
-            epoch=epoch)
+    for epoch in range(0, train_config["max_epoch"]):
+        train(train_loader=train_loader, 
+              encoder=encoder, 
+              row_encoder=row_encoder,
+              decoder=decoder, 
+              criterion=criterion,
+              encoder_optimizer=encoder_optimizer,
+              row_encoder_optimizer=row_encoder_optimizer,
+              decoder_optimizer=decoder_optimizer,
+              epoch=epoch)
         curr_bleu = validate(val_loader=val_loader,
                             encoder=encoder,
+                            row_encoder=row_encoder,
                             decoder=decoder,
-                            criterion=criterion, vocab = vocab)
+                            criterion=criterion, 
+                            vocab = vocab)
+
         # Check if there was an improvement
         is_best = curr_bleu > best_bleu
-        best_bleu4 = max(curr_bleu, best_bleu)
+        best_bleu = max(curr_bleu, best_bleu)
         if not is_best:
             epochs_since_improvement += 1
             print("\nNo improvement yet. Epochs since last improvement: %d\n" % (epochs_since_improvement,))

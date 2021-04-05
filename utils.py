@@ -4,6 +4,7 @@ from build_vocab import PAD_TOKEN, END_TOKEN
 def collate_fn(batch):
     shape = batch[0][0].shape
     batch = [img_form for img_form in batch if img_form[0].shape == shape]
+
     # sort by the length of formula
     batch.sort(key=lambda img_form: len(img_form[1]), reverse=True)
 
@@ -59,4 +60,21 @@ def accuracy(scores, targets, k):
     correct = ind.eq(targets.view(-1, 1).expand_as(ind))
     correct_total = correct.view(-1).float().sum()  # 0D tensor
     return correct_total.item() * (100.0 / batch_size)
+
+def idx2formulas(indices, vocab):
+    """
+    Convert a list of indices list into latex formulas according to "vocab".
+    """
+    formulas = []
+    for ind_list in indices: # Iterate over each batch
+        form = []
+        for i in ind_list:
+            if i != END_TOKEN:
+                form.append(vocab.id2sign[i])
+            else:
+                break
+        formulas.append(form)
+    return formulas
+
+
 

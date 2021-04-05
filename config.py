@@ -5,7 +5,7 @@ import os
 
 # data path related configs
 DATA_FOLDER_PATH = './data'
-IMG_FOLDER_PATH = os.path.join(DATA_FOLDER_PATH, 'images_processed') # 'formula_images_processed' for full data
+IMG_FOLDER_PATH = os.path.join(DATA_FOLDER_PATH, 'formula_images_processed') # 'formula_images_processed' for full data, 'images_processed' for sample data
 PROCESSED_FOLDER_PATH = './processed_data'
 
 preprocess_config = {
@@ -20,20 +20,24 @@ preprocess_config = {
 }
 
 train_config = {
+    'use_row': False,
     'use_cuda': False,
     'num_workers': 4,
     'lr': 3e-4,
-    'max_epoch': 10,
+    'max_epoch': 1,
     # 1) encoder (CNN) related configs
     # see `backbone_map` in encoder.py for a list of supported CNN backbones
     'cnn_backbone': 'ResNet101', # {'ResNet101', 'AlexNet'}
-    'encoded_img_size': 14,
+    'encoded_img_size': 64,
     'batch_size': 20,
 
-    # 2) attention related configs
+    # 2) row_encoder (LSTM) related configs
+    'row_hidden_size': 1024, # = 2048/num_directions
+
+    # 3) attention related configs
     'attention_dim': 2048,
     'alpha_c': 1, # regularization parameter for 'doubly stochastic attention'
 
-    # 3) decoder (LSTM) related configs
+    # 4) decoder (LSTM) related configs
     'decoder_dim': 512
 }
