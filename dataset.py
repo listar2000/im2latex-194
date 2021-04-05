@@ -22,7 +22,15 @@ class LatexDataloader(Iterable):
 
     !! RETURN VALUES: a tuple of size three (images_data, latex_data, latex_lens)
     1. images_data
-    a 
+    a torch float tensor of dimensions N x H x W where N is the batch_size (default 16)
+    
+    2. latex_data
+    a torch int16 tensor of dimensions N x L where L is the longest formula in that batch 
+    of size N
+
+    3. latex_lens
+    a torch int16 tensor of dimensions N x 1 where each element represents the original 
+    length of the text formula (note that the <start> and <end> tokens are not counted) 
     """
     def __init__(self, split: str, transform=None, shuffle: bool=True, batch_size: int=16):
         self.split = str.upper(split)
@@ -162,19 +170,22 @@ class LatexDataIterator(Iterator):
 
 
 if __name__ == '__main__':
-    import time
-    dataloader = LatexDataloader("validate", batch_size=16, shuffle=True)
-    start = time.time()
-    j = 0
-    for a, b, c in dataloader:
-        j += len(c)
-
-    print(time.time() - start)
-    print(j)
-    print(dataloader.dataset_size)
+    # import time
     # dataloader = LatexDataloader("validate", batch_size=16, shuffle=True)
+    # start = time.time()
+    # j = 0
+    # for a, b, c in dataloader:
+    #     j += len(c)
 
-    # dataIter = iter(dataloader)
-    # for i in range(3):
-    #     images, latex_data, index_lens = next(dataIter)
-    #     print(latex_data[0])
+    #     if j > 30:
+    #         break
+
+    # print(time.time() - start)
+    # print(j)
+    # print(dataloader.dataset_size)
+    dataloader = LatexDataloader("validate", batch_size=16, shuffle=True)
+
+    dataIter = iter(dataloader)
+    for i in range(3):
+        images, latex_data, index_lens = next(dataIter)
+        print(latex_data[0])
