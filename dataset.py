@@ -112,7 +112,7 @@ class LatexDataIterator(Iterator):
 
     def _pad_formulas(self, formulas, latex_lens, latex_order):
         # remember the start & the end added
-        max_len = latex_lens[latex_order[-1]] + 2
+        max_len = latex_lens[latex_order[0]] + 2
         padded = np.ones((len(latex_lens), max_len), dtype=np.int16)
 
         for i, o in enumerate(latex_order):
@@ -160,9 +160,11 @@ class LatexDataIterator(Iterator):
             latex_lens.append(len(formula))
 
         latex_lens = np.array(latex_lens, dtype=np.int16)
-        latex_order = np.argsort(latex_lens)
+        latex_order = np.argsort(-latex_lens) # trick to sort descending in numpy
 
         latex_data = self._pad_formulas(latex_data, latex_lens, latex_order)
+
+        latex_lens = latex_lens[latex_order]
         latex_data = torch.from_numpy(latex_data)
         latex_lens = torch.from_numpy(latex_lens)
 
@@ -186,6 +188,6 @@ if __name__ == '__main__':
     dataloader = LatexDataloader("validate", batch_size=16, shuffle=True)
 
     dataIter = iter(dataloader)
-    for i in range(3):
+    for i in range(5):
         images, latex_data, index_lens = next(dataIter)
-        print(latex_data[0])
+        print(index_lens)

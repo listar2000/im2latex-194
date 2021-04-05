@@ -65,7 +65,7 @@ def build_vocab(min_freq = preprocess_config['min_freq']):
 def load_vocab():
     with open(join(PROCESSED_FOLDER_PATH, 'vocab.pkl'), 'rb') as f:
         vocab = pkl.load(f)
-    print("Load vocab including {} words!".format(len(vocab)))
+    print("=> Load vocab including {} words!".format(len(vocab)))
     return vocab
 
 
