@@ -70,7 +70,7 @@ def load_vocab():
 
 
 if __name__ == "__main__":
-    vocab = load_vocab
+    vocab = load_vocab()
     # parser = argparse.ArgumentParser(description="Building vocab for Im2Latex")
     # parser.add_argument("--data_path", type=str,
     #                     default="./data/", help="The dataset's dir")

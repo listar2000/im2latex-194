@@ -102,6 +102,7 @@ class LatexDataIterator(Iterator):
     def _word_embed(self, formula):
         embedded = [0] # a start
         for word in formula:
+            print(word)
             if word in self.vocab.sign2id:
                 embedded.append(self.vocab.sign2id[word])
             else:
@@ -155,7 +156,7 @@ class LatexDataIterator(Iterator):
         latex_line_indices = self.curr_latex[idx]
         latex_data, latex_lens = [], []
         for index in latex_line_indices:
-            formula = self.loader.formulas[int(index)]
+            formula = self.loader.formulas[int(index)].split()
             latex_data.append(self._word_embed(formula))
             latex_lens.append(len(formula))
 
@@ -185,7 +186,7 @@ if __name__ == '__main__':
     # print(time.time() - start)
     # print(j)
     # print(dataloader.dataset_size)
-    dataloader = LatexDataloader("validate", batch_size=16, shuffle=True)
+    dataloader = LatexDataloader("validate", batch_size=1, shuffle=True)
 
     dataIter = iter(dataloader)
     for i in range(5):
