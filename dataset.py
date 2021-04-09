@@ -159,7 +159,7 @@ class LatexDataIterator(Iterator):
             latex_data.append(self._word_embed(formula))
             latex_lens.append(len(formula))
 
-        latex_lens = np.array(latex_lens, dtype=np.int16)
+        latex_lens = np.array(latex_lens, dtype=np.int32)
         latex_order = np.argsort(-latex_lens) # trick to sort descending in numpy
 
         latex_data = self._pad_formulas(latex_data, latex_lens, latex_order)

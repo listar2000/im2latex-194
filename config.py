@@ -20,6 +20,10 @@ preprocess_config = {
 }
 
 train_config = {
+    # automatically use the GPU if there's one available
+    'use_gpu': True,
+    'gpu_id': 0,
+    
     # 1) encoder (CNN) related configs
     # see `backbone_map` in encoder.py for a list of supported CNN backbones
     'cnn_backbone': 'ResNet101',
