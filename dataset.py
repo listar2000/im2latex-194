@@ -19,20 +19,22 @@ class LatexDataloader(Iterable):
     transform: optional, recommended to be from torchvision.transforms
     shuffle: whether to shuffle the minibatches (both image bins and images within a bin), default true
     batch_size: size of a minibatch, recommended to be 2**i where i is a natural number
-
     !! RETURN VALUES: a tuple of size three (images_data, latex_data, latex_lens)
     1. images_data
     a torch float tensor of dimensions N x H x W where N is the batch_size (default 16)
     
     2. latex_data
-    a torch int16 tensor of dimensions N x L where L is the longest formula in that batch 
+    a torch long tensor of dimensions N x L where L is the longest formula in that batch 
     of size N
 
     3. latex_lens
-    a torch int16 tensor of dimensions N x 1 where each element represents the original 
+    a torch long tensor of dimensions N x 1 where each element represents the original 
     length of the text formula (note that the <start> and <end> tokens are not counted) 
+    
+    For reference of correpsondece between NumPy and torch data type:
+    https://jdhao.github.io/2017/11/15/pytorch-datatype-note/#correpsondece-between-numpy-and-torch-data-type
     """
-    def __init__(self, split: str, transform=None, shuffle: bool=True, batch_size: int=16):
+    def __init__(self, split: str, transform=None, shuffle: bool=True, batch_size: int=16, sample: bool=False):
         self.split = str.upper(split)
         assert self.split in {'TRAIN', 'VALIDATE', 'TEST'}
 
@@ -40,7 +42,8 @@ class LatexDataloader(Iterable):
         self.batch_size = batch_size
 
         json_path = join(PROCESSED_FOLDER_PATH, "{}_CAPTIONS.json".format(self.split))
-        formula_path = join(DATA_FOLDER_PATH, "im2latex_formulas.norm.lst")
+        formulas_file_name = "formulas.norm.lst" if sample else "im2latex_formulas.norm.lst"
+        formula_path = join(DATA_FOLDER_PATH, formulas_file_name)
 
         with open(formula_path, 'r') as f:
             self.formulas = [formula.strip('\n') for formula in f.readlines()]
@@ -114,7 +117,7 @@ class LatexDataIterator(Iterator):
     def _pad_formulas(self, formulas, latex_lens, latex_order):
         # remember the start & the end added
         max_len = latex_lens[latex_order[0]] + 2
-        padded = np.ones((len(latex_lens), max_len), dtype=np.int16)
+        padded = np.ones((len(latex_lens), max_len), dtype=np.int64)
 
         for i, o in enumerate(latex_order):
             formula_len = latex_lens[o] + 2 
@@ -161,6 +164,7 @@ class LatexDataIterator(Iterator):
             latex_lens.append(len(formula))
 
         latex_lens = np.array(latex_lens, dtype=np.int32)
+
         latex_order = np.argsort(-latex_lens) # trick to sort descending in numpy
 
         latex_data = self._pad_formulas(latex_data, latex_lens, latex_order)
@@ -168,7 +172,7 @@ class LatexDataIterator(Iterator):
         latex_lens = latex_lens[latex_order]
         latex_data = torch.from_numpy(latex_data)
         latex_lens = torch.from_numpy(latex_lens)
-
+        
         return (images_data, latex_data, latex_lens)
 
 

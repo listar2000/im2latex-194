@@ -47,9 +47,9 @@ class Encoder(nn.Module):
         resnet101: image_size/32 
         alexnet: hard to directly compute
         """
-        out = self.backbone_net(images)  # (batch_size, out_channels, out_img_size, out_img_size)
-        out = self.adaptive_pool(out)  # (batch_size, out_channels, encoded_image_size, encoded_image_size)
-        out = out.permute(0, 2, 3, 1)  # (batch_size, encoded_image_size, encoded_image_size, out_channels)
+        out = self.backbone_net(images)  # (batch_size, out_channels, out_img_height, out_img_width)
+        out = self.adaptive_pool(out)  # (batch_size, out_channels, encoded_image_height, encoded_image_width)
+        out = out.permute(0, 2, 3, 1)  # (batch_size, encoded_image_height, encoded_image_width, out_channels)
         return out
     
     def fine_tune(self, fine_tune=True):
