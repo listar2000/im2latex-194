@@ -16,12 +16,12 @@ def init_gpu(use_gpu=train_config['use_gpu'], gpu_id=train_config['gpu_id']):
 def set_device(gpu_id):
     torch.cuda.set_device(gpu_id)
 
-def from_numpy(dtype: torch.dtype = None, *args, **kwargs):
+def from_numpy(nparray, dtype: torch.dtype = None):
     # let torch do the automatic type inference
     if not dtype: 
-        return torch.from_numpy(*args, **kwargs).to(device)
+        return torch.from_numpy(nparray).to(device)
     else:
-        return torch.from_numpy(*args, **kwargs).type(dtype).to(device)
+        return torch.from_numpy(nparray).type(dtype).to(device)
 
 def to_numpy(tensor, dtype: np.dtype = None):
     if not dtype:
