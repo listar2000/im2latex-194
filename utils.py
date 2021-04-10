@@ -76,5 +76,25 @@ def idx2formulas(indices, vocab):
         formulas.append(form)
     return formulas
 
+def save_checkpoint(epoch, epochs_since_improvement, encoder, row_encoder, decoder, encoder_optimizer, row_encoder_optimizer,
+                        decoder_optimizer, curr_loss, is_best, sample=False):
+    state = {'epoch': epoch,
+             'epochs_since_improvement': epochs_since_improvement,
+             'loss': curr_loss,
+             'encoder': encoder,
+             'row_encoder': row_encoder,
+             'decoder': decoder,
+             'encoder_optimizer': encoder_optimizer,
+             'row_encoder_optimizer': row_encoder_optimizer,
+             'decoder_optimizer': decoder_optimizer}
+    filename = 'epoch_' + epoch + '.pth.tar'
+    folder_name = "checkpoint"
+    if sample:
+        folder_name = "checkpoint/sample"
+    torch.save(state, join(folder_name, filename))
+    # If this checkpoint is the best so far, store a copy so it doesn't get overwritten by a worse checkpoint
+    if is_best:
+        torch.save(state, join(folder_name, 'BEST_' + filename))
+
 
 

@@ -3,6 +3,7 @@ import torch
 from torch import nn
 # configuration file
 from config import train_config
+from torch_utils import from_numpy
 
 device = train_config["device"]
 
@@ -52,7 +53,7 @@ class RowEncoder(nn.Module):
                          for pos in range(n_position)])
         position_enc[1:, 0::2] = np.sin(position_enc[1:, 0::2])
         position_enc[1:, 1::2] = np.cos(position_enc[1:, 1::2])
-        return x + torch.from_numpy(position_enc).type(torch.FloatTensor).to(device)
+        return x + from_numpy(position_enc, dtype=torch.FloatTensor)
 
 
 

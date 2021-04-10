@@ -20,12 +20,13 @@ from torch import nn
 import torch.optim as optim
 from torch.nn.utils.rnn import pack_padded_sequence
 from utils import *
+import wandb
 
 device = train_config['device']
 
 def load_data(sample=False):
-    train_loader = LatexDataloader("train", batch_size=16, shuffle=True, sample=sample)
-    val_loader = LatexDataloader("validate", batch_size=16, shuffle=True, sample=sample)
+    train_loader = LatexDataloader("train", batch_size=train_config["batch_size"], shuffle=True, sample=sample)
+    val_loader = LatexDataloader("validate", batch_size=train_config["batch_size"], shuffle=True, sample=sample)
     return train_loader, val_loader
 
 def load_model(vocab_size, row):
@@ -186,20 +187,23 @@ def validate(val_loader, encoder, row_encoder, decoder, criterion, vocab):
                       'Top-5 Accuracy {top5.val:.3f} ({top5.avg:.3f})\t'.format(i, len(val_loader), batch_time=batch_time,
                                                                                 loss=losses, top5=top5accs))
 
+            _, preds = torch.max(scores_copy, dim=2) # return indices of max scores 
+            pred_str = "".join(idx2formulas(preds[0], vocab)[0])
+            wandb.log({"val_pred_examples": [wandb.Image(img[0], caption=pred_str)]})
+            
+            # # References
+            # targets_copy = targets_copy.tolist()
+            # refs = idx2formulas(targets_copy, vocab)
+            # refs = [[x] for x in refs]
+            # references.append(refs)
 
-            # References
-            targets_copy = targets_copy.tolist()
-            refs = idx2formulas(targets_copy, vocab)
-            refs = [[x] for x in refs]
-            references.append(refs)
+            # # Predictions
+            # _, preds = torch.max(scores_copy, dim=2) # return indices of max scores
+            # preds = preds.tolist()
+            # preds = idx2formulas(preds, vocab)
+            # predictions.append(preds)
 
-            # Predictions
-            _, preds = torch.max(scores_copy, dim=2) # return indices of max scores
-            preds = preds.tolist()
-            preds = idx2formulas(preds, vocab)
-            predictions.append(preds)
-
-            assert len(refs) == len(preds)
+            # assert len(refs) == len(preds)
 
         # Calculate BLEU-4 scores
         # print("Ref:")
@@ -210,7 +214,8 @@ def validate(val_loader, encoder, row_encoder, decoder, criterion, vocab):
 
         # bleu = corpus_bleu(references, predictions)
         # print("BLEU-4:", bleu)
-    return bleu
+    # return bleu
+    return losses.avg
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Training...")
@@ -226,6 +231,12 @@ if __name__ == '__main__':
     print("Loading model...")
     encoder, row_encoder, decoder, encoder_optimizer, row_encoder_optimizer, decoder_optimizer = load_model(vocab_size, row=use_row)
     criterion = nn.CrossEntropyLoss().to(device)
+
+    wandb.init(project="im2latex", config=train_config)
+    wandb.watch(encoder)
+    if use_row:
+        wandb.watch(row_encoder)
+    wandb.watch(decoder)
 
     best_bleu = 0
     for epoch in range(0, train_config["max_epoch"]):
@@ -253,6 +264,11 @@ if __name__ == '__main__':
             print("\nNo improvement yet. Epochs since last improvement: %d\n" % (epochs_since_improvement,))
         else:
             epochs_since_improvement = 0
+
+        # Save checkpoint every epoch
+        save_checkpoint(epoch, epochs_since_improvement, encoder, row_encoder, decoder, encoder_optimizer, 
+                            row_encoder_optimizer, decoder_optimizer, curr_loss, is_best, sample=is_sample)
+
 
 
 

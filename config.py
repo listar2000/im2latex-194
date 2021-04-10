@@ -22,6 +22,7 @@ preprocess_config = {
 train_config = {
     'use_gpu': True,
     'use_row': False,
+    'device': "cuda" if torch.cuda.is_available() else "cpu", # Still need to integrate with torch_utils
     'gpu_id': 0,
     'num_workers': 4,
     'lr': 3e-4,
@@ -31,7 +32,7 @@ train_config = {
     # see `backbone_map` in encoder.py for a list of supported CNN backbones
     'cnn_backbone': 'ResNet101', # {'ResNet101', 'AlexNet'}
     'encoded_img_size': 64,
-    'batch_size': 20,
+    'batch_size': 8,
 
     # 2) row_encoder (LSTM) related configs
     'row_hidden_size': 1024, # = 2048/num_directions

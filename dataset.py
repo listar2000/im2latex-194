@@ -105,7 +105,7 @@ class LatexDataIterator(Iterator):
     def _word_embed(self, formula):
         embedded = [0] # a start
         for word in formula:
-            print(word)
+            # print(word)
             if word in self.vocab.sign2id:
                 embedded.append(self.vocab.sign2id[word])
             else:
