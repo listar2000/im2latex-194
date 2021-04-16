@@ -66,7 +66,7 @@ class LatexDataloader(Iterable):
         self.transform = transform
 
     def __len__(self):
-        return self.dataset_size
+        return int(sum(np.ceil(np.array(self.bin_sizes)/self.batch_size)))
 
     def __iter__(self):
         return LatexDataIterator(self)

@@ -1,5 +1,7 @@
 import torch
 from build_vocab import PAD_TOKEN, END_TOKEN
+from os.path import join
+import os
 
 def collate_fn(batch):
     shape = batch[0][0].shape
@@ -77,20 +79,23 @@ def idx2formulas(indices, vocab):
     return formulas
 
 def save_checkpoint(epoch, epochs_since_improvement, encoder, row_encoder, decoder, encoder_optimizer, row_encoder_optimizer,
-                        decoder_optimizer, curr_loss, is_best, sample=False):
+                        decoder_optimizer, curr_bleu, is_best, sample=False):
     state = {'epoch': epoch,
              'epochs_since_improvement': epochs_since_improvement,
-             'loss': curr_loss,
-             'encoder': encoder,
-             'row_encoder': row_encoder,
-             'decoder': decoder,
-             'encoder_optimizer': encoder_optimizer,
-             'row_encoder_optimizer': row_encoder_optimizer,
-             'decoder_optimizer': decoder_optimizer}
-    filename = 'epoch_' + epoch + '.pth.tar'
+             'bleu': curr_bleu,
+             'encoder': encoder.state_dict(),
+             'decoder': decoder.state_dict(),
+             'encoder_optimizer': encoder_optimizer.state_dict(),
+             'decoder_optimizer': decoder_optimizer.state_dict()}
+    if row_encoder is not None:
+        state["row_encoder"] = row_encoder.state_dict()
+        state["row_encoder_optimizer"] = row_encoder_optimizer.state_dict()
+    filename = 'epoch_' + str(epoch) + '.pth.tar'
     folder_name = "checkpoint"
     if sample:
         folder_name = "checkpoint/sample"
+    if not os.path.exists(folder_name):
+        os.makedirs(folder_name)
     torch.save(state, join(folder_name, filename))
     # If this checkpoint is the best so far, store a copy so it doesn't get overwritten by a worse checkpoint
     if is_best:

@@ -14,11 +14,12 @@ from models.decoder import DecoderWithAttention
 
 import time
 from tqdm import tqdm
-from nltk.translate.bleu_score import corpus_bleu, SmoothingFunction
+from nltk.translate.bleu_score import sentence_bleu
 import torch
 from torch import nn
 import torch.optim as optim
 from torch.nn.utils.rnn import pack_padded_sequence
+from torch_utils import *
 from utils import *
 import wandb
 
@@ -77,10 +78,10 @@ def train(epoch, train_loader, criterion,
             form_len = form_len.to(device)
 
             # Forward proprogation
-            img = encoder(img)
+            encoded_img = encoder(img)
             if row_encoder is not None:
-                img = row_encoder(img)
-            scores, alphas = decoder(img, form, form_len) 
+                encoded_img = row_encoder(encoded_img)
+            scores, alphas = decoder(encoded_img, form, form_len) 
 
             # Remove <start> token   
             targets = form[:, 1:]
@@ -137,6 +138,7 @@ def validate(val_loader, encoder, row_encoder, decoder, criterion, vocab):
     batch_time = AverageMeter()
     losses = AverageMeter()
     top5accs = AverageMeter()
+    bleu = AverageMeter()
     start = time.time()
 
     references = list() # True formulas
@@ -151,10 +153,10 @@ def validate(val_loader, encoder, row_encoder, decoder, criterion, vocab):
             # print("Original img shape:", img.shape)
 
             # Forward proprgation
-            img = encoder(img)
+            encoded_img = encoder(img)
             if row_encoder is not None:
-                img = row_encoder(img)
-            scores, alphas = decoder(img, form, form_len)
+                encoded_img = row_encoder(encoded_img)
+            scores, alphas = decoder(encoded_img, form, form_len)
             scores_copy = scores.clone()
 
             # Since we decoded starting with <start>, the targets are all words after <start>, up to <end>
@@ -175,22 +177,41 @@ def validate(val_loader, encoder, row_encoder, decoder, criterion, vocab):
             losses.update(loss.item(), sum(decode_lengths))
             top5 = accuracy(scores, targets, 5)
             top5accs.update(top5, sum(decode_lengths))
+            
+            
+
+            
+            _, preds = torch.max(scores_copy, dim=2) # return indices of max scores 
+            predictions = idx2formulas(to_numpy(preds), vocab)
+            references = idx2formulas(to_numpy(targets_copy), vocab)
+
+            # Sample prediction in wandb
+            pred_str = "".join(predictions[0])
+            wandb.log({"val_pred_examples": [wandb.Image(img[0], caption=pred_str)]})
+
+            # Calculate BLEU score
+            total_score = 0.0
+            for ref, pred in zip(references, predictions):
+                bleu_score = sentence_bleu([ref], pred)
+                total_score += bleu_score
+                bleu.update(bleu_score)
+            
+
             batch_time.update(time.time() - start)
-
-            start = time.time()
-
             # print every 100 batches
             if i % 100 == 0:
                 print('Validation: [{0}/{1}]\t'
                       'Batch Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                      'Top-5 Accuracy {top5.val:.3f} ({top5.avg:.3f})\t'.format(i, len(val_loader), batch_time=batch_time,
-                                                                                loss=losses, top5=top5accs))
-
-            _, preds = torch.max(scores_copy, dim=2) # return indices of max scores 
-            pred_str = "".join(idx2formulas(preds[0], vocab)[0])
-            wandb.log({"val_pred_examples": [wandb.Image(img[0], caption=pred_str)]})
+                      'Top-5 Accuracy {top5.val:.3f} ({top5.avg:.3f})\t'
+                      'Average BLEU {2} ({bleu.avg:.3f})'.format(i, len(val_loader), total_score/len(predictions), 
+                                                                 batch_time=batch_time,
+                                                                 loss=losses, 
+                                                                 top5=top5accs,
+                                                                 bleu=bleu))
             
+            start = time.time()                                                               
+
             # # References
             # targets_copy = targets_copy.tolist()
             # refs = idx2formulas(targets_copy, vocab)
@@ -214,8 +235,7 @@ def validate(val_loader, encoder, row_encoder, decoder, criterion, vocab):
 
         # bleu = corpus_bleu(references, predictions)
         # print("BLEU-4:", bleu)
-    # return bleu
-    return losses.avg
+    return bleu.avg
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Training...")
@@ -250,7 +270,7 @@ if __name__ == '__main__':
               decoder_optimizer=decoder_optimizer,
               epoch=epoch)
 
-        print("========== Validating ==========")
+        print("\n========== Validating ==========")
         curr_bleu = validate(val_loader=val_loader,
                             encoder=encoder,
                             row_encoder=row_encoder,
@@ -269,7 +289,7 @@ if __name__ == '__main__':
 
         # Save checkpoint every epoch
         save_checkpoint(epoch, epochs_since_improvement, encoder, row_encoder, decoder, encoder_optimizer, 
-                            row_encoder_optimizer, decoder_optimizer, curr_loss, is_best, sample=is_sample)
+                            row_encoder_optimizer, decoder_optimizer, curr_bleu, is_best, sample=args.sample)
 
 
 
