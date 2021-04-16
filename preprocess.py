@@ -33,7 +33,7 @@ IMG_SIZES = np.array([(64, 320), (64, 384), (64, 480), \
     (32, 480), (96, 384), (128, 480)])
 
 def preprocess(store_pkl, train=True, val=True, test=True, max_len=preprocess_config['max_len'], sample=False):
-    formulas_file_name = "formulas.norm.lst" if sample else "im2latex_formulas.norm.lst"
+    formulas_file_name = "sample/formulas.norm.lst" if sample else "im2latex_formulas.norm.lst"
     formulas_file = join(DATA_FOLDER_PATH, formulas_file_name)
     with open(formulas_file, 'r') as f:
         formulas = [formula.strip('\n') for formula in f.readlines()]
@@ -82,11 +82,11 @@ def preprocess_hdf(split, formulas, word_map, max_len, sample=False):
     print("Process {} dataset...".format(split))
 
     if sample:
-        split_fn = "{}_filter.lst".format(split)
+        split_fn = "sample/{}_filter.lst".format(split)
     else:
         split_fn = "im2latex_{}_filter.lst".format(split)
     split_fp = join(DATA_FOLDER_PATH, split_fn)
-    img_folder_name = "images_processed" if sample else "formula_images_processed"
+    img_folder_name = "sample/images_processed" if sample else "formula_images_processed"
 
     img_by_size, formula_by_size = {}, {}
     print("loading images & formula id from {}...".format(split_fn))
@@ -131,11 +131,11 @@ def preprocess_pkl(split, formulas, word_map, max_len, sample=False):
     print("Process {} dataset...".format(split))
 
     if sample:
-        split_fn = "{}_filter.lst".format(split)
+        split_fn = "sample/{}_filter.lst".format(split)
     else:
         split_fn = "im2latex_{}_filter.lst".format(split)
     split_fp = join(DATA_FOLDER_PATH, split_fn)
-    img_folder_name = "images_processed" if sample else "formula_images_processed"
+    img_folder_name = "sample/images_processed" if sample else "formula_images_processed"
 
     images, caption_info = [], []
 

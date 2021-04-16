@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from config import train_config
 
-device = None
+device = train_config["device"]
 
 def init_gpu(use_gpu=train_config['use_gpu'], gpu_id=train_config['gpu_id']):
     global device

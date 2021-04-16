@@ -42,7 +42,7 @@ class LatexDataloader(Iterable):
         self.batch_size = batch_size
 
         json_path = join(PROCESSED_FOLDER_PATH, "{}_CAPTIONS.json".format(self.split))
-        formulas_file_name = "formulas.norm.lst" if sample else "im2latex_formulas.norm.lst"
+        formulas_file_name = "sample/formulas.norm.lst" if sample else "im2latex_formulas.norm.lst"
         formula_path = join(DATA_FOLDER_PATH, formulas_file_name)
 
         with open(formula_path, 'r') as f:

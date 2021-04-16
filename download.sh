@@ -1,4 +1,4 @@
-mkdir data
+mkdir -p data
 cd data
 wget http://lstm.seas.harvard.edu/latex/data/im2latex_validate_filter.lst
 wget http://lstm.seas.harvard.edu/latex/data/im2latex_train_filter.lst

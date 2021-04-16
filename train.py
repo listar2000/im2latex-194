@@ -117,11 +117,11 @@ def train(epoch, train_loader, criterion,
 
             # Print every 100 batches
             if i % 100 == 0:
-                print('Epoch: [{0}][{1}/{2}]\t'
+                print('Memory allocation: {:.3f}GB\t'
                       'Batch Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                       'Data Load Time {data_time.val:.3f} ({data_time.avg:.3f})\t'
                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                      'Top-5 Accuracy {top5.val:.3f} ({top5.avg:.3f})'.format(epoch, i, len(train_loader),
+                      'Top-5 Accuracy {top5.val:.3f} ({top5.avg:.3f})'.format(torch.cuda.memory_allocated(device)/(1024**3),
                                                                               batch_time=batch_time,
                                                                               data_time=data_time, loss=losses,
                                                                               top5=top5accs))
@@ -142,7 +142,7 @@ def validate(val_loader, encoder, row_encoder, decoder, criterion, vocab):
     references = list() # True formulas
     predictions = list() # Predictions
     with torch.no_grad():
-        for i, (img, form, form_len) in enumerate(tqdm(val_loader), unit="val_batch"):
+        for i, (img, form, form_len) in enumerate(tqdm(val_loader, unit="val_batch")):
             # Move to GPU, if available
             img = img.to(device)
             form = form.to(device)
@@ -249,6 +249,8 @@ if __name__ == '__main__':
               row_encoder_optimizer=row_encoder_optimizer,
               decoder_optimizer=decoder_optimizer,
               epoch=epoch)
+
+        print("========== Validating ==========")
         curr_bleu = validate(val_loader=val_loader,
                             encoder=encoder,
                             row_encoder=row_encoder,

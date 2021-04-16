@@ -75,8 +75,8 @@ if __name__ == "__main__":
     parser.add_argument("--sample", action="store_true", default=False, help="Use sample data or not")
     args = parser.parse_args()
     if args.sample:
-        formulas_path = "formulas.norm.lst"
-        train_filter_path = "train_filter.lst"
+        formulas_path = "sample/formulas.norm.lst"
+        train_filter_path = "sample/train_filter.lst"
     else:
         formulas_path = "im2latex_formulas.norm.lst"
         train_filter_path = "im2latex_train_filter.lst"
