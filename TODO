@@ -1,0 +1,11 @@
+Week 4/16 - 4/23:
+
+- row encoder implementation (star)
+- testing script 
+    - beam search
+    - image rendering (might be in a specific util file) (star)
+- (modification) checkpoint 
+- argparse for hyperparameter tuning (star)
+- device related problems (gpu - cpu memory) (star)
+- centering of image before encoder
+- google drive + colab
