@@ -19,11 +19,11 @@ import torch
 from torch import nn
 import torch.optim as optim
 from torch.nn.utils.rnn import pack_padded_sequence
-from torch_utils import *
+from torch_utils import to_numpy, device
 from utils import *
 import wandb
 
-device = train_config['device']
+# device = train_config['device']
 
 def load_data(sample=False):
     train_loader = LatexDataloader("train", batch_size=train_config["batch_size"], shuffle=True, sample=sample)

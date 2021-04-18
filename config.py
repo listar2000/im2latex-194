@@ -35,6 +35,8 @@ train_config = {
     'batch_size': 8,
 
     # 2) row_encoder (LSTM) related configs
+    'row_init': True,
+    'row_input_size': 2048,
     'row_hidden_size': 1024, # = 2048/num_directions
 
     # 3) attention related configs
