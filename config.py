@@ -31,7 +31,7 @@ train_config = {
     # 1) encoder (CNN) related configs
     # see `backbone_map` in encoder.py for a list of supported CNN backbones
     'cnn_backbone': 'ResNet101', # {'ResNet101', 'AlexNet'}
-    'encoded_img_size': 14,
+    'encoded_img_height': 3,
     'batch_size': 8,
 
     # 2) row_encoder (LSTM) related configs
@@ -45,4 +45,8 @@ train_config = {
 
     # 4) decoder (LSTM) related configs
     'decoder_dim': 512
+}
+
+test_config = {
+    'max_length': 150
 }

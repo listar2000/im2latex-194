@@ -14,7 +14,7 @@ class Encoder(nn.Module):
     
     def __init__(self, 
                  backbone=train_config['cnn_backbone'],
-                 encoded_img_size=train_config['encoded_img_size']
+                 encoded_img_height=train_config['encoded_img_height']
                 ):
         super(Encoder, self).__init__()
 
@@ -29,7 +29,7 @@ class Encoder(nn.Module):
             self.backbone_net = nn.Sequential(*modules)
         
         self.backbone: str = backbone
-        self.adaptive_pool = nn.AdaptiveAvgPool2d((encoded_img_size, encoded_img_size))
+        self.adaptive_pool = nn.AdaptiveAvgPool2d((encoded_img_height, None))
         self.fine_tune()
     
     def forward(self, images):
@@ -48,8 +48,8 @@ class Encoder(nn.Module):
         alexnet: hard to directly compute
         """
         out = self.backbone_net(images)  # (batch_size, out_channels, out_img_height, out_img_width)
-        # out = self.adaptive_pool(out)  # (batch_size, out_channels, encoded_image_height, encoded_image_width)
-        out = out.permute(0, 2, 3, 1)  # (batch_size, encoded_image_height, encoded_image_width, out_channels)
+        out = self.adaptive_pool(out)  # (batch_size, out_channels, encoded_image_height, out_img_width)
+        out = out.permute(0, 2, 3, 1)  # (batch_size, encoded_image_height, out_img_width, out_channels)
         return out
     
     def fine_tune(self, fine_tune=True):

@@ -99,7 +99,7 @@ def save_checkpoint(epoch, epochs_since_improvement, encoder, row_encoder, decod
     torch.save(state, join(folder_name, filename))
     # If this checkpoint is the best so far, store a copy so it doesn't get overwritten by a worse checkpoint
     if is_best:
-        torch.save(state, join(folder_name, 'BEST_' + filename))
+        torch.save(state, join(folder_name, 'BEST.pth.tar'))
 
 
 
