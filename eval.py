@@ -6,6 +6,7 @@ import argparse
 from tqdm import tqdm
 import wandb
 from nltk.translate.bleu_score import sentence_bleu
+import torchvision.transforms as transforms
 
 from torch_utils import to_numpy, device
 from dataset import LatexDataloader
@@ -16,11 +17,9 @@ from models.decoder import DecoderWithAttention
 from config import test_config, train_config
 from utils import *
 
-def load_model(vocab_size, model_name, sample, use_row):
+def load_model(model_folder, vocab_size, model_name, sample, use_row):
     if sample:
-        model_folder = "checkpoint/sample"
-    else:
-        model_folder = "checkpoint"
+        model_folder = model_folder+"/sample"
     model_path = join(model_folder, model_name)
     checkpoint = torch.load(model_path)
 
@@ -104,9 +103,14 @@ def test(test_loader, encoder, row_encoder, decoder, vocab, beam_size):
 
             scores_so_far = top_k_scores.unsqueeze(1).expand_as(scores) + scores # (k, vocab_size)
 
-            # Unroll and find top scores, and their unrolled indices
-            top_k_scores, top_k_words_inds = scores_so_far.view(-1).topk(k, dim=0)  # (k), (k)
-
+            if step == 1:
+                # For the first step, all k points will have the same scores, 
+                # so we take just one row and find its top k scores.
+                top_k_scores, top_k_words_inds = scores_so_far[0].topk(k, dim=0)  # (k), (k)
+            else:
+                # Unroll and find top scores, and their unrolled indices
+                top_k_scores, top_k_words_inds = scores_so_far.view(-1).topk(k, dim=0)  # (k), (k)
+                
             # Convert unrolled indices to actual indices of scores
             prev_word_inds = top_k_words_inds // vocab_size # (k)
             new_word_inds = top_k_words_inds % vocab_size # (k)
@@ -145,22 +149,23 @@ def test(test_loader, encoder, row_encoder, decoder, vocab, beam_size):
         # Calculate max score/word
         max_i = complete_seqs_avg_scores.index(max(complete_seqs_avg_scores))
         pred_ind = complete_seqs[max_i]
-        predictions = idx2formulas([pred_ind], vocab) # (1, pred_length)
-        references = idx2formulas(to_numpy(form), vocab) # (1, ref_length)
+        predictions = idx2formulas([pred_ind[1:]], vocab) # (1, pred_length)
+        references = idx2formulas(to_numpy(form[:, 1:]), vocab) # (1, ref_length)
 
         assert(len(predictions) == len(references) == 1)
 
         # Sample prediction in wandb
         pred_str = "".join(predictions[0])
-        wandb.log({"test_pred_examples": [wandb.Image(img[0], caption=pred_str)]})
+        true_str = "".join(references[0])
+        wandb.log({"test_pred_examples": [wandb.Image(img[0], caption="pred: {}\ntrue: {}".format(pred_str, true_str))]})
 
         # Calculate BLEU score
         for ref, pred in zip(references, predictions):
             bleu_score = sentence_bleu([ref], pred)
         bleu.update(bleu_score)
 
-        # print every 10 batches
-        if i % 10 == 0:
+        # print every 100 batches
+        if i % 100 == 0:
             print('Test: [{0}/{1}]\t'
                   'BLEU {2} ({bleu.avg:.3f})'.format(i, len(test_loader), bleu_score, bleu=bleu))
 
@@ -174,6 +179,7 @@ if __name__ == '__main__':
     parser.add_argument("--model_name", type=str, default="BEST.pth.tar", help="Which checkpoint to use")
     parser.add_argument("--row", action="store_true", default=False, help="Use row_encoder or not")
     parser.add_argument('--beam_size', type=int, default=5, help='Beam size for beam search')
+    parser.add_argument("--checkpoint_folder", type=str, default="checkpoint", help="Specify the checkpoint folder path")
     args = parser.parse_args()
 
     vocab = load_vocab()
@@ -186,7 +192,7 @@ if __name__ == '__main__':
     test_loader = LatexDataloader("test", transform=normalize, batch_size=1, shuffle=True, sample=args.sample)
 
     print("Loading model...")
-    encoder, row_encoder, decoder, encoder_optimizer, row_encoder_optimizer, decoder_optimizer = load_model(vocab_size, args.model_name, args.sample, args.row)
+    encoder, row_encoder, decoder, encoder_optimizer, row_encoder_optimizer, decoder_optimizer = load_model(args.checkpoint_folder, vocab_size, args.model_name, args.sample, args.row)
 
     wandb.init(project="im2latex")
     avg_bleu = test(test_loader=test_loader,

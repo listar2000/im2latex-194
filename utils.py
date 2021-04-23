@@ -1,5 +1,5 @@
 import torch
-from build_vocab import PAD_TOKEN, END_TOKEN
+from build_vocab import START_TOKEN, PAD_TOKEN, END_TOKEN
 from os.path import join
 import os
 
@@ -71,7 +71,9 @@ def idx2formulas(indices, vocab):
     for ind_list in indices: # Iterate over each batch
         form = []
         for i in ind_list:
-            if i != END_TOKEN:
+            if i == START_TOKEN:
+                continue
+            elif i != END_TOKEN:
                 form.append(vocab.id2sign[i])
             else:
                 break
