@@ -78,7 +78,7 @@ def idx2formulas(indices, vocab):
         formulas.append(form)
     return formulas
 
-def save_checkpoint(epoch, epochs_since_improvement, encoder, row_encoder, decoder, encoder_optimizer, row_encoder_optimizer,
+def save_checkpoint(folder_name, epoch, epochs_since_improvement, encoder, row_encoder, decoder, encoder_optimizer, row_encoder_optimizer,
                         decoder_optimizer, curr_bleu, is_best, sample=False):
     state = {'epoch': epoch,
              'epochs_since_improvement': epochs_since_improvement,
@@ -91,9 +91,8 @@ def save_checkpoint(epoch, epochs_since_improvement, encoder, row_encoder, decod
         state["row_encoder"] = row_encoder.state_dict()
         state["row_encoder_optimizer"] = row_encoder_optimizer.state_dict()
     filename = 'epoch_' + str(epoch) + '.pth.tar'
-    folder_name = "checkpoint"
     if sample:
-        folder_name = "checkpoint/sample"
+        folder_name = folder_name+"/sample"
     if not os.path.exists(folder_name):
         os.makedirs(folder_name)
     torch.save(state, join(folder_name, filename))

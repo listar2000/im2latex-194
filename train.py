@@ -20,14 +20,18 @@ from torch import nn
 import torch.optim as optim
 from torch.nn.utils.rnn import pack_padded_sequence
 from torch_utils import to_numpy, device
+import torchvision.transforms as transforms
 from utils import *
 import wandb
 
 # device = train_config['device']
 
 def load_data(sample=False):
-    train_loader = LatexDataloader("train", batch_size=train_config["batch_size"], shuffle=True, sample=sample)
-    val_loader = LatexDataloader("validate", batch_size=train_config["batch_size"], shuffle=True, sample=sample)
+    # Referenced from https://pytorch.org/vision/stable/models.html
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
+    train_loader = LatexDataloader("train", transform=normalize, batch_size=train_config["batch_size"], shuffle=True, sample=sample)
+    val_loader = LatexDataloader("validate", transform=normalize, batch_size=train_config["batch_size"], shuffle=True, sample=sample)
     return train_loader, val_loader
 
 def load_model(vocab_size, row):
@@ -240,6 +244,7 @@ def validate(val_loader, encoder, row_encoder, decoder, criterion, vocab):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Training...")
     parser.add_argument("--sample", action="store_true", default=False, help="Use sample data or not")
+    parser.add_argument("--checkpoint_folder", type=str, default="checkpoint", help="Specify the checkpoint folder path")
     args = parser.parse_args()
 
     vocab = load_vocab()
@@ -288,7 +293,7 @@ if __name__ == '__main__':
             epochs_since_improvement = 0
 
         # Save checkpoint every epoch
-        save_checkpoint(epoch, epochs_since_improvement, encoder, row_encoder, decoder, encoder_optimizer, 
+        save_checkpoint(args.checkpoint_folder, epoch, epochs_since_improvement, encoder, row_encoder, decoder, encoder_optimizer, 
                             row_encoder_optimizer, decoder_optimizer, curr_bleu, is_best, sample=args.sample)
 
 

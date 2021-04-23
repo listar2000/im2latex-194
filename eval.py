@@ -180,7 +180,10 @@ if __name__ == '__main__':
     vocab_size = len(vocab)
 
     print("Loading test data...")
-    test_loader = LatexDataloader("test", batch_size=1, shuffle=True, sample=args.sample)
+    # Referenced from https://pytorch.org/vision/stable/models.html
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
+    test_loader = LatexDataloader("test", transform=normalize, batch_size=1, shuffle=True, sample=args.sample)
 
     print("Loading model...")
     encoder, row_encoder, decoder, encoder_optimizer, row_encoder_optimizer, decoder_optimizer = load_model(vocab_size, args.model_name, args.sample, args.row)
