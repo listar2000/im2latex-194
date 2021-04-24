@@ -122,6 +122,11 @@ def train(epoch, train_loader, criterion,
 
             # Print every 100 batches
             if i % 100 == 0:
+                wandb.log({"Epoch": epoch, 
+                           "Memory allocation(GB)": torch.cuda.memory_allocated(device)/(1024**3),
+                           "Train_loss":losses.val,
+                           "Train_avg_loss:":losses.avg,
+                           "Train_top5_acc": top5accs.val})
                 print('Memory allocation: {:.3f}GB\t'
                       'Batch Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                       'Data Load Time {data_time.val:.3f} ({data_time.avg:.3f})\t'
@@ -204,6 +209,10 @@ def validate(val_loader, encoder, row_encoder, decoder, criterion, vocab):
             batch_time.update(time.time() - start)
             # print every 100 batches
             if i % 100 == 0:
+                wandb.log({"Val_loss":losses.val,
+                           "Val_avg_loss:":losses.avg,
+                           "Val_top5_acc": top5accs.val,
+                           "Val_avg_BLEU": bleu.avg})
                 print('Validation: [{0}/{1}]\t'
                       'Batch Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
@@ -249,52 +258,53 @@ if __name__ == '__main__':
 
     vocab = load_vocab()
     vocab_size = len(vocab)
-    use_row = train_config['use_row']
-    print("Loading data...")
-    train_loader, val_loader = load_data(args.sample)
 
-    print("Loading model...")
-    encoder, row_encoder, decoder, encoder_optimizer, row_encoder_optimizer, decoder_optimizer = load_model(vocab_size, row=use_row)
-    criterion = nn.CrossEntropyLoss().to(device)
+    with wandb.init(project="im2latex", config=train_config):
+        use_row = train_config['use_row']
+        print("Loading data...")
+        train_loader, val_loader = load_data(args.sample)
 
-    wandb.init(project="im2latex", config=train_config)
-    wandb.watch(encoder)
-    if use_row:
-        wandb.watch(row_encoder)
-    wandb.watch(decoder)
+        print("Loading model...")
+        encoder, row_encoder, decoder, encoder_optimizer, row_encoder_optimizer, decoder_optimizer = load_model(vocab_size, row=use_row)
+        criterion = nn.CrossEntropyLoss().to(device)
 
-    best_bleu = 0
-    for epoch in range(0, train_config["max_epoch"]):
-        train(train_loader=train_loader, 
-              encoder=encoder, 
-              row_encoder=row_encoder,
-              decoder=decoder, 
-              criterion=criterion,
-              encoder_optimizer=encoder_optimizer,
-              row_encoder_optimizer=row_encoder_optimizer,
-              decoder_optimizer=decoder_optimizer,
-              epoch=epoch)
+        wandb.watch(encoder)
+        if use_row:
+            wandb.watch(row_encoder)
+        wandb.watch(decoder)
 
-        print("\n========== Validating ==========")
-        curr_bleu = validate(val_loader=val_loader,
-                            encoder=encoder,
-                            row_encoder=row_encoder,
-                            decoder=decoder,
-                            criterion=criterion, 
-                            vocab = vocab)
+        best_bleu = 0
+        for epoch in range(0, train_config["max_epoch"]):
+            train(train_loader=train_loader, 
+                  encoder=encoder, 
+                  row_encoder=row_encoder,
+                  decoder=decoder, 
+                  criterion=criterion,
+                  encoder_optimizer=encoder_optimizer,
+                  row_encoder_optimizer=row_encoder_optimizer,
+                  decoder_optimizer=decoder_optimizer,
+                  epoch=epoch)
 
-        # Check if there was an improvement
-        is_best = curr_bleu > best_bleu
-        best_bleu = max(curr_bleu, best_bleu)
-        if not is_best:
-            epochs_since_improvement += 1
-            print("\nNo improvement yet. Epochs since last improvement: %d\n" % (epochs_since_improvement,))
-        else:
-            epochs_since_improvement = 0
+            print("\n========== Validating ==========")
+            curr_bleu = validate(val_loader=val_loader,
+                                encoder=encoder,
+                                row_encoder=row_encoder,
+                                decoder=decoder,
+                                criterion=criterion, 
+                                vocab = vocab)
 
-        # Save checkpoint every epoch
-        save_checkpoint(args.checkpoint_folder, epoch, epochs_since_improvement, encoder, row_encoder, decoder, encoder_optimizer, 
-                            row_encoder_optimizer, decoder_optimizer, curr_bleu, is_best, sample=args.sample)
+            # Check if there was an improvement
+            is_best = curr_bleu > best_bleu
+            best_bleu = max(curr_bleu, best_bleu)
+            if not is_best:
+                epochs_since_improvement += 1
+                print("\nNo improvement yet. Epochs since last improvement: %d\n" % (epochs_since_improvement,))
+            else:
+                epochs_since_improvement = 0
+
+            # Save checkpoint every epoch
+            save_checkpoint(args.checkpoint_folder, epoch, epochs_since_improvement, encoder, row_encoder, decoder, encoder_optimizer, 
+                                row_encoder_optimizer, decoder_optimizer, curr_bleu, is_best, sample=args.sample)
 
 
 
