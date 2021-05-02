@@ -25,6 +25,7 @@ from utils import *
 import wandb
 
 # device = train_config['device']
+total_step = 0
 
 def load_data(sample=False):
     # Referenced from https://pytorch.org/vision/stable/models.html
@@ -58,11 +59,16 @@ def train(epoch, train_loader, criterion,
           encoder, encoder_optimizer,
           decoder, decoder_optimizer, 
           row_encoder=None, row_encoder_optimizer=None):
+    
+    global total_step
     # Set models to training mode.
     encoder.train()
     if row_encoder is not None:
         row_encoder.train()
     decoder.train()
+
+    decay_k = train_config['decay_k']
+    decay_method = train_config['decay_method']
 
     # Initialize performance metrics.
     batch_time = AverageMeter()  # forward prop. + back prop. time
@@ -73,6 +79,8 @@ def train(epoch, train_loader, criterion,
     start = time.time()
     with tqdm(train_loader, unit="batch") as tepoch:
         for i, (img, form, form_len) in enumerate(tepoch):
+            total_step += 1
+
             tepoch.set_description(f"Epoch {epoch}")
             data_time.update(time.time() - start)
 
@@ -85,7 +93,10 @@ def train(epoch, train_loader, criterion,
             encoded_img = encoder(img)
             if row_encoder is not None:
                 encoded_img = row_encoder(encoded_img)
-            scores, alphas = decoder(encoded_img, form, form_len) 
+
+            curr_eps = cal_epsilon(decay_k, total_step, decay_method)  
+
+            scores, alphas = decoder(encoded_img, form, form_len, curr_eps) 
 
             # Remove <start> token   
             targets = form[:, 1:]
@@ -126,7 +137,8 @@ def train(epoch, train_loader, criterion,
                            "Memory allocation(GB)": torch.cuda.memory_allocated(device)/(1024**3),
                            "Train_loss":losses.val,
                            "Train_avg_loss:":losses.avg,
-                           "Train_top5_acc": top5accs.val})
+                           "Train_top5_acc": top5accs.val,
+                           "Decayed_eps": curr_eps})
                 print('Memory allocation: {:.3f}GB\t'
                       'Batch Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                       'Data Load Time {data_time.val:.3f} ({data_time.avg:.3f})\t'
@@ -186,9 +198,6 @@ def validate(val_loader, encoder, row_encoder, decoder, criterion, vocab):
             losses.update(loss.item(), sum(decode_lengths))
             top5 = accuracy(scores, targets, 5)
             top5accs.update(top5, sum(decode_lengths))
-            
-            
-
             
             _, preds = torch.max(scores_copy, dim=2) # return indices of max scores 
             predictions = idx2formulas(to_numpy(preds), vocab)

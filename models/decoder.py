@@ -78,7 +78,7 @@ class DecoderWithAttention(nn.Module):
         c = self.init_c(mean_images)
         return h, c
 
-    def forward(self, images, formulas, formula_lengths):
+    def forward(self, images, formulas, formula_lengths, epsilon=1.):
         """
         Forward propagation.
 
@@ -127,9 +127,16 @@ class DecoderWithAttention(nn.Module):
             attention_weighted_encoding, alpha = self.attention(images[:batch_size_t], h[:batch_size_t])
             gate = self.sigmoid(self.f_beta(h[:batch_size_t]))  # gating scalar, (batch_size_t, encoder_dim)
             attention_weighted_encoding = gate * attention_weighted_encoding
-            h, c = self.decode_step(torch.cat([embeddings[:batch_size_t, t, :], 
+            # randomly not following the teacher forcing
+            if t > 1 and torch.rand(1) > epsilon:
+                h, c = self.decode_step(torch.cat([scores[:batch_size_t, t-1, :], 
                                                attention_weighted_encoding], dim=1),
                                     (h[:batch_size_t], c[:batch_size_t]))  # (batch_size_t, decoder_dim)
+            else:
+                h, c = self.decode_step(torch.cat([embeddings[:batch_size_t, t, :], 
+                                                attention_weighted_encoding], dim=1),
+                                        (h[:batch_size_t], c[:batch_size_t]))  # (batch_size_t, decoder_dim)
+
             preds = self.fc(self.dropout(h))  # (batch_size_t, vocab_size)
             scores[:batch_size_t, t, :] = preds
             alphas[:batch_size_t, t, :] = alpha

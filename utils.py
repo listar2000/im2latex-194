@@ -2,6 +2,7 @@ import torch
 from build_vocab import START_TOKEN, PAD_TOKEN, END_TOKEN
 from os.path import join
 import os
+import math
 
 def collate_fn(batch):
     shape = batch[0][0].shape
@@ -102,5 +103,18 @@ def save_checkpoint(folder_name, epoch, epochs_since_improvement, encoder, row_e
     if is_best:
         torch.save(state, join(folder_name, 'BEST.pth.tar'))
 
+def cal_epsilon(k, step, method):
+    """
+    Reference:
+        Scheduled Sampling for Sequence Prediction with Recurrent Neural Networks
+        See details in https://arxiv.org/pdf/1506.03099.pdf
+    """
+    assert method in ['inv_sigmoid', 'exp', 'teacher_forcing']
 
+    if method == 'exp':
+        return k**step
+    elif method == 'inv_sigmoid':
+        return k/(k+math.exp(step/k))
+    else:
+        return 1.
 
