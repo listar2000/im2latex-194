@@ -196,8 +196,9 @@ if __name__ == '__main__':
 
     print("Loading test data...")
     # Referenced from https://pytorch.org/vision/stable/models.html
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
+    # normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+    #                                  std=[0.229, 0.224, 0.225])
+    normalize = None
     test_loader = LatexDataloader("test", transform=normalize, batch_size=1, shuffle=True, sample=args.sample)
 
     print("Loading model...")

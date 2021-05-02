@@ -27,10 +27,13 @@ import wandb
 # device = train_config['device']
 total_step = 0
 
-def load_data(sample=False):
+def load_data(sample=False, normalize=False):
     # Referenced from https://pytorch.org/vision/stable/models.html
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
+    if normalize:
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                         std=[0.229, 0.224, 0.225])
+    else:
+        normalize = None
     train_loader = LatexDataloader("train", transform=normalize, batch_size=train_config["batch_size"], shuffle=True, sample=sample)
     val_loader = LatexDataloader("validate", transform=normalize, batch_size=train_config["batch_size"], shuffle=True, sample=sample)
     return train_loader, val_loader
@@ -205,7 +208,8 @@ def validate(val_loader, encoder, row_encoder, decoder, criterion, vocab):
 
             # Sample prediction in wandb
             pred_str = "".join(predictions[0])
-            wandb.log({"val_pred_examples": [wandb.Image(img[0], caption=pred_str)]})
+            true_str = "".join(references[0])
+            wandb.log({"val_pred_examples": [wandb.Image(img[0], caption="pred: {}\ntrue: {}".format(pred_str, true_str))]})
 
             # Calculate BLEU score
             total_score = 0.0
