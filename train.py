@@ -152,7 +152,7 @@ def train(epoch, train_loader, criterion,
                                                                               top5=top5accs))
 
 
-def validate(val_loader, encoder, row_encoder, decoder, criterion, vocab):
+def validate(epoch, val_loader, encoder, row_encoder, decoder, criterion, vocab):
     decoder.eval()
     encoder.eval()
     if row_encoder is not None:
@@ -222,7 +222,8 @@ def validate(val_loader, encoder, row_encoder, decoder, criterion, vocab):
             batch_time.update(time.time() - start)
             # print every 100 batches
             if i % 100 == 0:
-                wandb.log({"Val_loss":losses.val,
+                wandb.log({"Epoch":epoch,
+                           "Val_loss":losses.val,
                            "Val_avg_loss:":losses.avg,
                            "Val_top5_acc": top5accs.val,
                            "Val_avg_BLEU": bleu.avg})
@@ -304,7 +305,8 @@ if __name__ == '__main__':
                                 row_encoder=row_encoder,
                                 decoder=decoder,
                                 criterion=criterion, 
-                                vocab = vocab)
+                                vocab = vocab,
+                                epoch=epoch)
 
             # Check if there was an improvement
             is_best = curr_bleu > best_bleu

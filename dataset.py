@@ -167,6 +167,7 @@ class LatexDataIterator(Iterator):
 
         latex_order = np.argsort(-latex_lens) # trick to sort descending in numpy
 
+        images_data = images_data[latex_order]
         latex_data = self._pad_formulas(latex_data, latex_lens, latex_order)
 
         latex_lens = latex_lens[latex_order]

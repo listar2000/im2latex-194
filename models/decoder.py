@@ -141,8 +141,8 @@ class DecoderWithAttention(nn.Module):
             scores[:batch_size_t, t, :] = preds
             alphas[:batch_size_t, t, :] = alpha
 
-        # Remove the <start> token
-        scores = scores[:, 1:, :]
-        alphas = alphas[:, 1:, :]
+        # # Remove the <start> token
+        # scores = scores[:, 1:, :]
+        # alphas = alphas[:, 1:, :]
         return scores, alphas
 
