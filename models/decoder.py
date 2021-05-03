@@ -8,6 +8,7 @@ import torch
 from torch import nn
 import torchvision
 from models.attention import Attention
+from torch_utils import device
 
 class DecoderWithAttention(nn.Module):
     """
@@ -105,8 +106,8 @@ class DecoderWithAttention(nn.Module):
         # images = images[sort_ind]
         # formulas = formulas[sort_ind]
 
-        # Embedding
-        embeddings = self.embedding(formulas)  # (batch_size, max_formula_length, embed_dim)
+        # # Embedding (Commented out - Moved inside the for loop)
+        # embeddings = self.embedding(formulas)  # (batch_size, max_formula_length, embed_dim)
 
         # Initialize LSTM state
         h, c = self.init_hidden_state(images)  # (batch_size, decoder_dim)
@@ -116,8 +117,8 @@ class DecoderWithAttention(nn.Module):
         decode_lengths = (formula_lengths + 1).tolist() # include start, not end tokens
 
         # Initialize tensors to hold word prediction scores and alphas
-        scores = torch.zeros(batch_size, max(decode_lengths), vocab_size)
-        alphas = torch.zeros(batch_size, max(decode_lengths), num_pixels)
+        scores = torch.zeros(batch_size, max(decode_lengths), vocab_size).to(device)
+        alphas = torch.zeros(batch_size, max(decode_lengths), num_pixels).to(device)
 
         # At each time-step, decode by:
         # 1) attention-weighing the encoder's output based on the decoder's previous hidden state output
@@ -128,14 +129,14 @@ class DecoderWithAttention(nn.Module):
             gate = self.sigmoid(self.f_beta(h[:batch_size_t]))  # gating scalar, (batch_size_t, encoder_dim)
             attention_weighted_encoding = gate * attention_weighted_encoding
             # randomly not following the teacher forcing
-            if t > 1 and torch.rand(1) > epsilon:
-                h, c = self.decode_step(torch.cat([scores[:batch_size_t, t-1, :], 
-                                               attention_weighted_encoding], dim=1),
-                                    (h[:batch_size_t], c[:batch_size_t]))  # (batch_size_t, decoder_dim)
+            if t > 1 and torch.rand(1) >= epsilon:
+                input_token = torch.argmax(scores[:batch_size_t, t-1, :], dim=1) # (batch_size_t, )
             else:
-                h, c = self.decode_step(torch.cat([embeddings[:batch_size_t, t, :], 
-                                                attention_weighted_encoding], dim=1),
-                                        (h[:batch_size_t], c[:batch_size_t]))  # (batch_size_t, decoder_dim)
+                input_token = formulas[:batch_size_t, t] # (batch_size_t, )
+            embedded_token = self.embedding(input_token) # (batch_size_t, embed_dim)
+            h, c = self.decode_step(torch.cat([embedded_token,
+                                            attention_weighted_encoding], dim=1),
+                                    (h[:batch_size_t], c[:batch_size_t]))  # (batch_size_t, decoder_dim)
 
             preds = self.fc(self.dropout(h))  # (batch_size_t, vocab_size)
             scores[:batch_size_t, t, :] = preds

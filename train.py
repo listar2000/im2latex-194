@@ -98,7 +98,6 @@ def train(epoch, train_loader, criterion,
                 encoded_img = row_encoder(encoded_img)
 
             curr_eps = cal_epsilon(decay_k, total_step, decay_method)  
-
             scores, alphas = decoder(encoded_img, form, form_len, curr_eps) 
 
             # Remove <start> token   
@@ -180,7 +179,8 @@ def validate(epoch, val_loader, encoder, row_encoder, decoder, criterion, vocab)
             encoded_img = encoder(img)
             if row_encoder is not None:
                 encoded_img = row_encoder(encoded_img)
-            scores, alphas = decoder(encoded_img, form, form_len)
+            # Set epsilon=0 (Not using teacher forcing for validation)
+            scores, alphas = decoder(encoded_img, form, form_len, epsilon=0)
             scores_copy = scores.clone()
 
             # Since we decoded starting with <start>, the targets are all words after <start>, up to <end>
