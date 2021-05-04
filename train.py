@@ -24,7 +24,6 @@ import torchvision.transforms as transforms
 from utils import *
 import wandb
 
-# device = train_config['device']
 total_step = 0
 
 def load_data(sample=False, normalize=False):
@@ -38,23 +37,56 @@ def load_data(sample=False, normalize=False):
     val_loader = LatexDataloader("validate", transform=normalize, batch_size=train_config["batch_size"], shuffle=True, sample=sample)
     return train_loader, val_loader
 
-def load_model(vocab_size, row):
-    encoder = Encoder()
-    encoder = encoder.to(device)
-    encoder.fine_tune()
-    encoder_optimizer = optim.Adam(encoder.parameters(), lr=train_config["lr"])
+def load_model(vocab_size, row, sample, model_folder, model_name):
+    if model_name is None:
+        encoder = Encoder()
+        encoder.fine_tune()
+        encoder_optimizer = optim.Adam(encoder.parameters(), lr=train_config["lr"])
 
-    if row:
-        row_encoder = RowEncoder()
-        row_encoder.to(device)
-        row_encoder_optimizer = optim.Adam(row_encoder.parameters(), lr=train_config["lr"])
+        if row:
+            row_encoder = RowEncoder()
+            row_encoder.to(device)
+            row_encoder_optimizer = optim.Adam(row_encoder.parameters(), lr=train_config["lr"])
+        else:
+            row_encoder = None
+            row_encoder_optimizer = None
+
+        decoder = DecoderWithAttention(vocab_size=vocab_size)
+        decoder_optimizer = optim.Adam(decoder.parameters(), lr=train_config["lr"])
+    
     else:
-        row_encoder = None
-        row_encoder_optimizer = None
+        # Load checkpoint
+        if sample:
+            model_folder = model_folder+"/sample"
+        model_path = join(model_folder, model_name)
+        checkpoint = torch.load(model_path)
+        print("Checkpoint ended in epoch {}".format(checkpoint['epoch']))
+        
+        encoder = Encoder()
+        encoder.load_state_dict(checkpoint['encoder'])
+        encoder_optimizer = optim.Adam(encoder.parameters())
+        encoder_optimizer.load_state_dict(checkpoint['encoder_optimizer'])
 
-    decoder = DecoderWithAttention(vocab_size=vocab_size)
+        if "row_encoder" in checkpoint:
+            print("Using row encoder!")
+            row_encoder = RowEncoder()
+            row_encoder.load_state_dict(checkpoint['row_encoder'])
+            row_encoder.to(device)
+            row_encoder_optimizer = optim.Adam(row_encoder.parameters())
+            row_encoder_optimizer.load_state_dict(checkpoint['row_encoder_optimizer'])
+
+        else:
+            print("Not using row encoder!")
+            row_encoder = None
+            row_encoder_optimizer = None
+
+        decoder = DecoderWithAttention(vocab_size=vocab_size)
+        decoder.load_state_dict(checkpoint['decoder'])
+        decoder_optimizer = optim.Adam(decoder.parameters())
+        decoder_optimizer.load_state_dict(checkpoint['decoder_optimizer'])
+
+    encoder = encoder.to(device)
     decoder = decoder.to(device)
-    decoder_optimizer = optim.Adam(decoder.parameters(), lr=train_config["lr"])
 
     return encoder, row_encoder, decoder, encoder_optimizer, row_encoder_optimizer, decoder_optimizer
 
@@ -267,28 +299,55 @@ def validate(epoch, val_loader, encoder, row_encoder, decoder, criterion, vocab)
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Training...")
     parser.add_argument("--sample", action="store_true", default=False, help="Use sample data or not")
+    parser.add_argument("--row", action="store_true", default=False, help="Use row_encoder or not")
+    parser.add_argument('--max_epoch', type=int, default=1, help='max epoch for training')
     parser.add_argument("--checkpoint_folder", type=str, default="checkpoint", help="Specify the checkpoint folder path")
+    parser.add_argument("--model_name", type=str, default=None, help="Which checkpoint to use")
     args = parser.parse_args()
 
     vocab = load_vocab()
     vocab_size = len(vocab)
 
     with wandb.init(project="im2latex", config=train_config):
-        use_row = train_config['use_row']
         print("Loading data...")
         train_loader, val_loader = load_data(args.sample)
 
         print("Loading model...")
-        encoder, row_encoder, decoder, encoder_optimizer, row_encoder_optimizer, decoder_optimizer = load_model(vocab_size, row=use_row)
+        encoder, row_encoder, decoder, encoder_optimizer, row_encoder_optimizer, decoder_optimizer = load_model(vocab_size, 
+                                                                                                                row=args.row,
+                                                                                                                sample=args.sample, 
+                                                                                                                model_folder=args.checkpoint_folder, 
+                                                                                                                model_name=args.model_name)
         criterion = nn.CrossEntropyLoss().to(device)
 
         wandb.watch(encoder)
-        if use_row:
+        if row_encoder is not None:
             wandb.watch(row_encoder)
         wandb.watch(decoder)
 
         best_bleu = 0
-        for epoch in range(0, train_config["max_epoch"]):
+        start_epoch = 0
+        epochs_since_improvement = 0
+        if args.model_name:
+            # Load checkpoint info
+            model_folder = args.checkpoint_folder
+            if args.sample:
+                model_folder = model_folder+"/sample"
+            model_path = join(model_folder, args.model_name)
+            checkpoint = torch.load(model_path)
+            start_epoch = checkpoint['epoch']+1
+            best_bleu = checkpoint['bleu']
+
+        for epoch in range(start_epoch, args.max_epoch):
+            # Decay learning rate if there is no improvement for 8 consecutive epochs, and terminate training after 20
+            if epochs_since_improvement == 20:
+                break
+            if epochs_since_improvement > 0 and epochs_since_improvement % 8 == 0:
+                adjust_learning_rate(encoder_optimizer, 0.8)
+                if row_encoder is not None:
+                    adjust_learning_rate(row_encoder_optimizer, 0.8)
+                adjust_learning_rate(decoder_optimizer, 0.8)
+
             train(train_loader=train_loader, 
                   encoder=encoder, 
                   row_encoder=row_encoder,

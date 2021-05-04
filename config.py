@@ -21,12 +21,12 @@ preprocess_config = {
 
 train_config = {
     'use_gpu': True,
-    'use_row': False,
+    # 'use_row': False, # added as a flag
     'device': "cuda" if torch.cuda.is_available() else "cpu", # Still need to integrate with torch_utils
     'gpu_id': 0,
     'num_workers': 4,
     'lr': 3e-4,
-    'max_epoch': 1,
+    # 'max_epoch': 1, # added as a flag
    
     # 1) encoder (CNN) related configs
     # see `backbone_map` in encoder.py for a list of supported CNN backbones

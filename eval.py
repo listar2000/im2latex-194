@@ -22,6 +22,7 @@ def load_model(model_folder, vocab_size, model_name, sample, use_row):
         model_folder = model_folder+"/sample"
     model_path = join(model_folder, model_name)
     checkpoint = torch.load(model_path)
+    print("Checkpoint ended in epoch {}".format(checkpoint['epoch']))
 
     encoder = Encoder()
     encoder.load_state_dict(checkpoint['encoder'])
