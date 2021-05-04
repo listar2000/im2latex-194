@@ -103,8 +103,8 @@ def train(epoch, train_loader, criterion,
             # Remove <start> token   
             targets = form[:, 1:]
 
-            # A convenient way of removing <end> and <pad> tokens
-            decode_lengths = form_len # Length of the original sequence, not including start, end, or padding
+            # A convenient way of removing <pad> tokens
+            decode_lengths = form_len+1 # Length of the original sequence, not including start or padding
             scores = pack_padded_sequence(scores, decode_lengths.cpu(), batch_first=True).data.to(device)
             targets = pack_padded_sequence(targets, decode_lengths.cpu(), batch_first=True).data.to(device)
 
@@ -187,8 +187,8 @@ def validate(epoch, val_loader, encoder, row_encoder, decoder, criterion, vocab)
             targets = form[:, 1:]
             targets_copy = targets.clone()
 
-            # A convenient way of removing <end> and <pad> tokens
-            decode_lengths = form_len # Length of the original sequence, not including start, end, or padding
+            # A convenient way of removing <pad> tokens
+            decode_lengths = form_len+1 # Length of the original sequence, not including start or padding
             scores = pack_padded_sequence(scores, decode_lengths.cpu(), batch_first=True).data.to(device)
             targets = pack_padded_sequence(targets, decode_lengths.cpu(), batch_first=True).data.to(device)
 
