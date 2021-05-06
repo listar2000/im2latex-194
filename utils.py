@@ -127,6 +127,11 @@ def cal_epsilon(k, step, method):
         return k**step
     elif method == 'inv_sigmoid':
         return k/(k+math.exp(step/k))
+    elif method == 'special-exp':
+        if step < 6000: # around 5 epoches
+            return 1.
+        else:
+            return k ** (step - 6000)
     else:
         return 1.
 
