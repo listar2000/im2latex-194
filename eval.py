@@ -30,14 +30,14 @@ def load_model(model_folder, vocab_size, model_name, sample=False):
     encoder.eval()
 
     if "row_encoder" in checkpoint:
-        row_encoder = RowEncoder(train_init=False)
+        row_encoder = RowEncoder()
 
         row_state_dict = checkpoint['row_encoder']
-        for k, v in row_state_dict.items():
-            if k == "init_hidden":
-                row_encoder.init_hidden = v
-            elif k == "init_cell":
-                row_encoder.init_cell = v
+        if "init_hidden" in row_state_dict.keys():
+            row_encoder.train_init = False
+            row_encoder.init_hidden = row_state_dict["init_hidden"]
+            row_encoder.init_cell = row_state_dict["init_cell"]
+            print("Init_hc in row_encoder. ")
         row_encoder.load_state_dict(row_state_dict, strict=False)
         
         row_encoder.to(device)
@@ -124,10 +124,10 @@ def beam_search(encoded_img, encoder, row_encoder, decoder, vocab_size, beam_siz
             complete_seqs.extend(seqs[complete_inds].tolist())
             complete_seqs_avg_scores.extend(top_k_scores[complete_inds]/(step+1))
             complete_seqs_alpha.extend(seqs_alpha[complete_inds].tolist())
-        # k -= len(complete_inds)  # reduce beam length accordingly
+        k -= len(complete_inds)  # reduce beam length accordingly
 
         # Break if we have all k candidates or if things have been going for too long
-        if (len(complete_seqs) >= 10) or (step > test_config["max_length"]): 
+        if k == 0 or (step > test_config["max_length"]): 
             if step > test_config["max_length"]:
                 complete_seqs.extend(seqs.tolist())
                 complete_seqs_avg_scores.extend(top_k_scores/(step+1))

@@ -26,20 +26,20 @@ class LatexGenerator(object):
         
 
     def load_model(self, model_path):
-        checkpoint = torch.load(model_path)
+        checkpoint = torch.load(model_path, map_location=device)
         encoder = Encoder()
         encoder.load_state_dict(checkpoint['encoder'])
         encoder.to(device)
         encoder.eval()
         if "row_encoder" in checkpoint:
-            row_encoder = RowEncoder(train_init=False)
+            row_encoder = RowEncoder()
 
             row_state_dict = checkpoint['row_encoder']
-            for k, v in row_state_dict.items():
-                if k == "init_hidden":
-                    row_encoder.init_hidden = v
-                elif k == "init_cell":
-                    row_encoder.init_cell = v
+            if "init_hidden" in row_state_dict.keys():
+                row_encoder.train_init = False
+                row_encoder.init_hidden = row_state_dict["init_hidden"]
+                row_encoder.init_cell = row_state_dict["init_cell"]
+                print("Init_hc in row_encoder. ")
             row_encoder.load_state_dict(row_state_dict, strict=False)
 
             row_encoder.to(device)
