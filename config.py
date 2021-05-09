@@ -46,7 +46,7 @@ train_config = {
     # 4) decoder (LSTM) related configs
     'decoder_dim': 512,
     'decay_k': 0.99995,
-    'decay_method': 'exp'
+    'decay_method': 'special-exp'
 }
 
 test_config = {

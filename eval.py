@@ -17,7 +17,7 @@ from models.decoder import DecoderWithAttention
 from config import test_config, train_config
 from utils import *
 
-def load_model(model_folder, vocab_size, model_name, sample, use_row):
+def load_model(model_folder, vocab_size, model_name, sample=False):
     if sample:
         model_folder = model_folder+"/sample"
     model_path = join(model_folder, model_name)
@@ -29,7 +29,7 @@ def load_model(model_folder, vocab_size, model_name, sample, use_row):
     encoder.to(device)
     encoder.eval()
 
-    if use_row:
+    if "row_encoder" in checkpoint:
         row_encoder = RowEncoder()
         row_encoder.load_state_dict(checkpoint['row_encoder'])
         row_encoder.to(device)
@@ -45,7 +45,7 @@ def load_model(model_folder, vocab_size, model_name, sample, use_row):
 
     return encoder, row_encoder, decoder
 
-def beam_search(encoded_img, form, form_len, encoder, row_encoder, decoder, vocab_size, beam_size):
+def beam_search(encoded_img, encoder, row_encoder, decoder, vocab_size, beam_size):
     
     encoder_dim = encoded_img.size(-1)
     # Flatten image
@@ -116,11 +116,11 @@ def beam_search(encoded_img, form, form_len, encoder, row_encoder, decoder, voca
             complete_seqs.extend(seqs[complete_inds].tolist())
             complete_seqs_avg_scores.extend(top_k_scores[complete_inds]/(step+1))
             complete_seqs_alpha.extend(seqs_alpha[complete_inds].tolist())
-        k -= len(complete_inds)  # reduce beam length accordingly
+        # k -= len(complete_inds)  # reduce beam length accordingly
 
         # Break if we have all k candidates or if things have been going for too long
-        if k == 0 or step > test_config["max_length"]: 
-            if len(complete_inds) == 0:
+        if (len(complete_seqs) >= 10) or (step > test_config["max_length"]): 
+            if step > test_config["max_length"]:
                 complete_seqs.extend(seqs.tolist())
                 complete_seqs_avg_scores.extend(top_k_scores/(step+1))
                 complete_seqs_alpha.extend(seqs_alpha.tolist())
@@ -157,7 +157,7 @@ def test(test_loader, encoder, row_encoder, decoder, vocab, beam_size):
         if row_encoder is not None:
             encoded_img = row_encoder(encoded_img)
 
-        pred_ind, alphas = beam_search(encoded_img, form, form_len, encoder, row_encoder, decoder, vocab_size, beam_size)
+        pred_ind, alphas = beam_search(encoded_img, encoder, row_encoder, decoder, vocab_size, beam_size)
         predictions = idx2formulas([pred_ind[1:]], vocab) # (1, pred_length)
         references = idx2formulas(to_numpy(form[:, 1:]), vocab) # (1, ref_length)
 
@@ -184,10 +184,9 @@ def test(test_loader, encoder, row_encoder, decoder, vocab, beam_size):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Training...")
+    parser = argparse.ArgumentParser(description="Evaluating...")
     parser.add_argument("--sample", action="store_true", default=False, help="Use sample data or not")
     parser.add_argument("--model_name", type=str, default="BEST.pth.tar", help="Which checkpoint to use")
-    parser.add_argument("--row", action="store_true", default=False, help="Use row_encoder or not")
     parser.add_argument('--beam_size', type=int, default=5, help='Beam size for beam search')
     parser.add_argument("--checkpoint_folder", type=str, default="checkpoint", help="Specify the checkpoint folder path")
     args = parser.parse_args()
@@ -203,13 +202,15 @@ if __name__ == '__main__':
     test_loader = LatexDataloader("test", transform=normalize, batch_size=1, shuffle=True, sample=args.sample)
 
     print("Loading model...")
-    encoder, row_encoder, decoder = load_model(args.checkpoint_folder, vocab_size, args.model_name, args.sample, args.row)
+    encoder, row_encoder, decoder = load_model(args.checkpoint_folder, vocab_size, args.model_name, args.sample)
 
-    wandb.init(project="im2latex")
+    wandb.init(project="im2latex", config=args)
     avg_bleu = test(test_loader=test_loader,
                     encoder=encoder,
                     row_encoder=row_encoder,
                     decoder=decoder, 
                     vocab = vocab,
                     beam_size = args.beam_size)
+
+    print("\nAverage BLEU of the test set is {}. \n".format(avg_bleu))
 

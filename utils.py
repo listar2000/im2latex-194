@@ -121,7 +121,7 @@ def cal_epsilon(k, step, method):
         Scheduled Sampling for Sequence Prediction with Recurrent Neural Networks
         See details in https://arxiv.org/pdf/1506.03099.pdf
     """
-    assert method in ['inv_sigmoid', 'exp', 'teacher_forcing']
+    assert method in ['special-exp', 'inv_sigmoid', 'exp', 'teacher_forcing']
 
     if method == 'exp':
         return k**step

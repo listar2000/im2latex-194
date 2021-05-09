@@ -305,80 +305,82 @@ if __name__ == '__main__':
     parser.add_argument("--model_name", type=str, default=None, help="Which checkpoint to use")
     args = parser.parse_args()
 
+    wandb.init(project="im2latex", config=train_config)
+    wandb.config.update(args)
+
     vocab = load_vocab()
     vocab_size = len(vocab)
 
-    with wandb.init(project="im2latex", config=train_config):
-        print("Loading data...")
-        train_loader, val_loader = load_data(args.sample)
+    print("Loading data...")
+    train_loader, val_loader = load_data(args.sample)
 
-        print("Loading model...")
-        encoder, row_encoder, decoder, encoder_optimizer, row_encoder_optimizer, decoder_optimizer = load_model(vocab_size, 
-                                                                                                                row=args.row,
-                                                                                                                sample=args.sample, 
-                                                                                                                model_folder=args.checkpoint_folder, 
-                                                                                                                model_name=args.model_name)
-        criterion = nn.CrossEntropyLoss().to(device)
+    print("Loading model...")
+    encoder, row_encoder, decoder, encoder_optimizer, row_encoder_optimizer, decoder_optimizer = load_model(vocab_size, 
+                                                                                                            row=args.row,
+                                                                                                            sample=args.sample, 
+                                                                                                            model_folder=args.checkpoint_folder, 
+                                                                                                            model_name=args.model_name)
+    criterion = nn.CrossEntropyLoss().to(device)
 
-        wandb.watch(encoder)
-        if row_encoder is not None:
-            wandb.watch(row_encoder)
-        wandb.watch(decoder)
+    wandb.watch(encoder)
+    if row_encoder is not None:
+        wandb.watch(row_encoder)
+    wandb.watch(decoder)
 
-        best_bleu = 0
-        start_epoch = 0
-        epochs_since_improvement = 0
-        if args.model_name:
-            # Load checkpoint info
-            model_folder = args.checkpoint_folder
-            if args.sample:
-                model_folder = model_folder+"/sample"
-            model_path = join(model_folder, args.model_name)
-            checkpoint = torch.load(model_path)
-            start_epoch = checkpoint['epoch']+1
-            best_bleu = checkpoint['bleu']
+    best_bleu = 0
+    start_epoch = 0
+    epochs_since_improvement = 0
+    if args.model_name:
+        # Load checkpoint info
+        model_folder = args.checkpoint_folder
+        if args.sample:
+            model_folder = model_folder+"/sample"
+        model_path = join(model_folder, args.model_name)
+        checkpoint = torch.load(model_path)
+        start_epoch = checkpoint['epoch']+1
+        best_bleu = checkpoint['bleu']
 
-        for epoch in range(start_epoch, args.max_epoch):
-            # Decay learning rate if there is no improvement for 8 consecutive epochs, and terminate training after 20
-            if epochs_since_improvement == 20:
-                break
-            if epochs_since_improvement > 0 and epochs_since_improvement % 8 == 0:
-                adjust_learning_rate(encoder_optimizer, 0.8)
-                if row_encoder is not None:
-                    adjust_learning_rate(row_encoder_optimizer, 0.8)
-                adjust_learning_rate(decoder_optimizer, 0.8)
+    for epoch in range(start_epoch, args.max_epoch):
+        # Decay learning rate if there is no improvement for 8 consecutive epochs, and terminate training after 20
+        if epochs_since_improvement == 20:
+            break
+        if epochs_since_improvement > 0 and epochs_since_improvement % 8 == 0:
+            adjust_learning_rate(encoder_optimizer, 0.8)
+            if row_encoder is not None:
+                adjust_learning_rate(row_encoder_optimizer, 0.8)
+            adjust_learning_rate(decoder_optimizer, 0.8)
 
-            train(train_loader=train_loader, 
-                  encoder=encoder, 
-                  row_encoder=row_encoder,
-                  decoder=decoder, 
-                  criterion=criterion,
-                  encoder_optimizer=encoder_optimizer,
-                  row_encoder_optimizer=row_encoder_optimizer,
-                  decoder_optimizer=decoder_optimizer,
-                  epoch=epoch)
+        train(train_loader=train_loader, 
+              encoder=encoder, 
+              row_encoder=row_encoder,
+              decoder=decoder, 
+              criterion=criterion,
+              encoder_optimizer=encoder_optimizer,
+              row_encoder_optimizer=row_encoder_optimizer,
+              decoder_optimizer=decoder_optimizer,
+              epoch=epoch)
 
-            print("\n========== Validating ==========")
-            curr_bleu = validate(val_loader=val_loader,
-                                encoder=encoder,
-                                row_encoder=row_encoder,
-                                decoder=decoder,
-                                criterion=criterion, 
-                                vocab = vocab,
-                                epoch=epoch)
+        print("\n========== Validating ==========")
+        curr_bleu = validate(val_loader=val_loader,
+                            encoder=encoder,
+                            row_encoder=row_encoder,
+                            decoder=decoder,
+                            criterion=criterion, 
+                            vocab = vocab,
+                            epoch=epoch)
 
-            # Check if there was an improvement
-            is_best = curr_bleu > best_bleu
-            best_bleu = max(curr_bleu, best_bleu)
-            if not is_best:
-                epochs_since_improvement += 1
-                print("\nNo improvement yet. Epochs since last improvement: %d\n" % (epochs_since_improvement,))
-            else:
-                epochs_since_improvement = 0
+        # Check if there was an improvement
+        is_best = curr_bleu > best_bleu
+        best_bleu = max(curr_bleu, best_bleu)
+        if not is_best:
+            epochs_since_improvement += 1
+            print("\nNo improvement yet. Epochs since last improvement: %d\n" % (epochs_since_improvement,))
+        else:
+            epochs_since_improvement = 0
 
-            # Save checkpoint every epoch
-            save_checkpoint(args.checkpoint_folder, epoch, epochs_since_improvement, encoder, row_encoder, decoder, encoder_optimizer, 
-                                row_encoder_optimizer, decoder_optimizer, curr_bleu, is_best, sample=args.sample)
+        # Save checkpoint every epoch
+        save_checkpoint(args.checkpoint_folder, epoch, epochs_since_improvement, encoder, row_encoder, decoder, encoder_optimizer, 
+                            row_encoder_optimizer, decoder_optimizer, curr_bleu, is_best, sample=args.sample)
 
 
 
