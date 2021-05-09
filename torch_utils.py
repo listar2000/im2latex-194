@@ -28,3 +28,10 @@ def to_numpy(tensor, dtype: np.dtype = None):
         return tensor.to('cpu').detach().numpy()
     else:
         return tensor.to('cpu').detach().numpy().astype(dtype)
+
+def optimizer_to_device(optimizer, device):
+    # Adapted from https://github.com/pytorch/pytorch/issues/2830
+    for state in optimizer.state.values():
+        for k, v in state.items():
+            if torch.is_tensor(v):
+                state[k] = v.to(device)

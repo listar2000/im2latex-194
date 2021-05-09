@@ -19,10 +19,11 @@ import torch
 from torch import nn
 import torch.optim as optim
 from torch.nn.utils.rnn import pack_padded_sequence
-from torch_utils import to_numpy, device
+from torch_utils import to_numpy, device, optimizer_to_device
 import torchvision.transforms as transforms
 from utils import *
 import wandb
+from collections import OrderedDict
 
 total_step = 0
 
@@ -66,14 +67,24 @@ def load_model(vocab_size, row, sample, model_folder, model_name):
         encoder.load_state_dict(checkpoint['encoder'])
         encoder_optimizer = optim.Adam(encoder.parameters())
         encoder_optimizer.load_state_dict(checkpoint['encoder_optimizer'])
+        optimizer_to_device(encoder_optimizer, device)
 
         if "row_encoder" in checkpoint:
             print("Using row encoder!")
-            row_encoder = RowEncoder()
-            row_encoder.load_state_dict(checkpoint['row_encoder'])
+            row_encoder = RowEncoder(train_init=False)
+
+            row_state_dict = checkpoint['row_encoder']
+            for k, v in row_state_dict.items():
+                if k == "init_hidden":
+                    row_encoder.init_hidden = v
+                elif k == "init_cell":
+                    row_encoder.init_cell = v
+            row_encoder.load_state_dict(row_state_dict, strict=False)
+
             row_encoder.to(device)
             row_encoder_optimizer = optim.Adam(row_encoder.parameters())
             row_encoder_optimizer.load_state_dict(checkpoint['row_encoder_optimizer'])
+            optimizer_to_device(row_encoder_optimizer, device)
 
         else:
             print("Not using row encoder!")
@@ -84,9 +95,10 @@ def load_model(vocab_size, row, sample, model_folder, model_name):
         decoder.load_state_dict(checkpoint['decoder'])
         decoder_optimizer = optim.Adam(decoder.parameters())
         decoder_optimizer.load_state_dict(checkpoint['decoder_optimizer'])
+        optimizer_to_device(decoder_optimizer, device)
 
-    encoder = encoder.to(device)
-    decoder = decoder.to(device)
+    encoder.to(device)
+    decoder.to(device)
 
     return encoder, row_encoder, decoder, encoder_optimizer, row_encoder_optimizer, decoder_optimizer
 
