@@ -36,9 +36,9 @@ class RowEncoder(nn.Module):
 
         if self.train_init and not self.init_created:
             self.init_hidden = torch.empty(2, h, self.hidden_size)
-            self.init_hidden = nn.Parameter(nn.init.kaiming_normal_(self.init_hidden)).to(device)
+            self.init_hidden = nn.Parameter(nn.init.kaiming_normal_(self.init_hidden).to(device))
             self.init_cell = torch.empty(2, h, self.hidden_size)
-            self.init_cell = nn.Parameter(nn.init.kaiming_normal_(self.init_cell)).to(device)
+            self.init_cell = nn.Parameter(nn.init.kaiming_normal_(self.init_cell).to(device))
             self.init_created = True
 
         images = images.contiguous().view(b*h, w, c)

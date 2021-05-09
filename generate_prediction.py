@@ -32,7 +32,7 @@ class LatexGenerator(object):
         encoder.to(device)
         encoder.eval()
         if "row_encoder" in checkpoint:
-            row_encoder = RowEncoder()
+            row_encoder = RowEncoder(train_init=False)
             row_encoder.load_state_dict(checkpoint['row_encoder'])
             row_encoder.to(device)
             row_encoder.eval()
